@@ -208,8 +208,9 @@ describe("Equb Protocol", function () {
 
       const balanceAfter = await ethers.provider.getBalance(dagna.address);
       const pool = CONTRIBUTION * 3n;
+      const expectedNetGain = pool - CONTRIBUTION;
 
-      expect(balanceAfter - balanceBefore).to.be.closeTo(pool, ethers.parseEther("0.5"));
+      expect(balanceAfter - balanceBefore).to.be.closeTo(expectedNetGain, ethers.parseEther("0.5"));
       expect(await group.currentRound()).to.equal(2);
       expect(await group.paidCount()).to.equal(0);
     });
@@ -273,8 +274,9 @@ describe("Equb Protocol", function () {
 
       const balanceAfter = await ethers.provider.getBalance(member2.address);
       const pool = CONTRIBUTION * 3n;
+      const expectedNetGain = pool - CONTRIBUTION;
 
-      expect(balanceAfter - balanceBefore).to.be.closeTo(pool, ethers.parseEther("0.5"));
+      expect(balanceAfter - balanceBefore).to.be.closeTo(expectedNetGain, ethers.parseEther("0.5"));
       expect(await group.emergencyMode()).to.be.false;
     });
   });

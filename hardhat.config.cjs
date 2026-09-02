@@ -3,6 +3,7 @@ require("@nomicfoundation/hardhat-toolbox");
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
+  defaultNetwork: "hardhat",
   solidity: {
     version: "0.8.24",
     settings: {
@@ -13,10 +14,11 @@ module.exports = {
     },
   },
   networks: {
+    hardhat: {},
     arc_testnet: {
       url: "https://rpc.testnet.arc.network",
       chainId: 5042002,
-      accounts: [process.env.PRIVATE_KEY],
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
   },
   etherscan: {
