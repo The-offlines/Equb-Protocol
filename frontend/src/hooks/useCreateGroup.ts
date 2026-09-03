@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import { parseUnits } from "viem";
+import { decodeEventLog, parseUnits } from "viem";
 
 import { useCircleContext } from "@/src/providers/CircleProvider";
 import { clearCache as clearFactoryCache } from "@/src/hooks/useFactory";
@@ -12,8 +12,9 @@ import {
   executeChallenge,
   getContractChallengeId,
   pollTransactionStatus,
+  formatCircleError,
 } from "@/src/lib/circle";
-import { FACTORY_ADDRESS } from "@/src/lib/contract";
+import { EqubFactory, FACTORY_ADDRESS } from "@/src/lib/contract";
 
 export function useCreateGroup() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export function useCreateGroup() {
     interval: number,
     isPrivate: boolean,
   ) => {
+    console.log("STEP 1: Create Equb button clicked", { name, contributionAmount, maxMembers, interval, isPrivate });
     setIsLoading(true);
     setIsSuccess(false);
     setError(null);
@@ -78,6 +80,7 @@ export function useCreateGroup() {
       }
 
       const walletId = walletIdData.walletId;
+      console.log("STEP 2: Circle wallet ready", { walletId, walletAddress });
 
       // Prepare function parameters
       const amountInUnits = parseUnits(String(contributionAmount), 6);
@@ -96,31 +99,65 @@ export function useCreateGroup() {
         abiFunctionSignature: "createGroup(string,uint256,uint256,uint256,bool)",
         abiParameters,
       });
+      console.log("STEP 3: Contract execution challenge created", { challengeId, contractAddress: FACTORY_ADDRESS });
 
       // Wait for the approval modal to finish before polling for the transaction result.
-      await executeChallenge(challengeId, userToken, encryptionKey, (error) => {
+      await executeChallenge(challengeId, userToken, encryptionKey, (error, result) => {
         if (error) {
           console.error("Circle approval challenge failed:", error);
+          return;
         }
+        console.log("Circle approval completed:", result);
       });
 
       const hash = await pollTransactionStatus(challengeId, userToken);
 
+      if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
+        throw new Error(`Circle returned an invalid transaction hash: ${hash || "empty"}`);
+      }
+      console.log("STEP 4: Transaction hash:", hash);
+
       setTxHash(hash);
 
       // Wait for transaction to be confirmed on-chain
+      console.log("STEP 5: Waiting for transaction receipt...");
       const receipt = await publicClient.waitForTransactionReceipt({ hash: hash as `0x${string}` });
-      if (receipt.status === "reverted") {
-        throw new Error("Transaction was rejected by the contract. Check your parameters");
+      console.log("STEP 6: Receipt status:", receipt.status, { transactionHash: receipt.transactionHash, blockNumber: receipt.blockNumber });
+      if (receipt.status !== "success") {
+        throw new Error(`Transaction reverted; receipt status: ${receipt.status}; transaction hash: ${hash}`);
       }
+
+      const groupCreatedLog = receipt.logs.find((log) => {
+        if (log.address.toLowerCase() !== FACTORY_ADDRESS.toLowerCase()) return false;
+        try {
+          decodeEventLog({ abi: EqubFactory, eventName: "GroupCreated", data: log.data, topics: log.topics });
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      if (!groupCreatedLog) throw new Error(`No factory event found; receipt status: ${receipt.status}; transaction hash: ${hash}`);
+      let decodedGroup: string | undefined;
+      try {
+        const decoded = decodeEventLog({ abi: EqubFactory, eventName: "GroupCreated", data: groupCreatedLog.data, topics: groupCreatedLog.topics });
+        decodedGroup = (decoded.args as { group?: string }).group;
+        console.log("STEP 7: Logs decoded", decoded);
+      } catch (decodeError) {
+        throw new Error(`Unable to decode GroupCreated event; receipt status: ${receipt.status}; transaction hash: ${hash}; cause: ${formatCircleError(decodeError)}`);
+      }
+      if (!decodedGroup || !/^0x[0-9a-fA-F]{40}$/.test(decodedGroup)) {
+        throw new Error(`GroupCreated event did not contain a valid group address; transaction hash: ${hash}`);
+      }
+      console.log("STEP 8: Group address extracted:", decodedGroup);
 
       clearFactoryCache();
       clearRegistryCache();
       setIsSuccess(true);
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      router.push("/my-equbs");
+      router.push(`/group/${decodedGroup}`);
     } catch (caughtError) {
-      const errorMessage = caughtError instanceof Error ? caughtError.message : "Failed to create group";
+      const errorMessage = formatCircleError(caughtError);
+      console.error("Create Equb pipeline failed (original):", caughtError);
 
       // Map Circle error codes to user-friendly messages
       if (
@@ -140,8 +177,6 @@ export function useCreateGroup() {
         } else {
           setError("Your Circle session expired. Please sign in with your email again");
         }
-      } else if (errorMessage.includes("reverted")) {
-        setError("Transaction was rejected by the contract. Check your parameters");
       } else {
         setError(errorMessage);
       }

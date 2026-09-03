@@ -21,7 +21,8 @@ export async function POST(request: Request) {
     if (transactionId) {
       url = `https://api.circle.com/v1/w3s/user/transactions/${encodeURIComponent(transactionId)}`;
     } else {
-      url = `https://api.circle.com/v1/w3s/user/transactions?challengeIds=${encodeURIComponent(challengeId)}`;
+      // The request guard above guarantees challengeId when transactionId is absent.
+      url = `https://api.circle.com/v1/w3s/user/transactions?challengeIds=${encodeURIComponent(challengeId!)}`;
     }
 
     console.log("Polling with:", { url, userToken: userToken?.substring(0, 20) + "..." });
@@ -39,14 +40,18 @@ export async function POST(request: Request) {
         transaction?: { state?: string; txHash?: string };
         transactions?: Array<{ state?: string; txHash?: string }>;
       };
-      error?: { message?: string };
+      error?: { message?: string; code?: number | string; details?: unknown };
     };
 
     console.log("Circle transaction-status response:", JSON.stringify(circleData, null, 2));
 
     if (!circleResponse.ok) {
       return NextResponse.json(
-        { error: circleData.error?.message ?? "Circle API error" },
+        {
+          error: circleData.error?.message ?? `Circle transaction-status HTTP ${circleResponse.status}`,
+          code: circleData.error?.code,
+          details: circleData.error?.details,
+        },
         { status: circleResponse.status },
       );
     }
@@ -54,6 +59,10 @@ export async function POST(request: Request) {
     const tx = circleData.data?.transaction ?? circleData.data?.transactions?.[0];
     const state = tx?.state;
     const txHash = tx?.txHash;
+
+    if (!state) {
+      return NextResponse.json({ error: "Circle returned no transaction state.", data: circleData.data }, { status: 502 });
+    }
 
     return NextResponse.json({ state, txHash });
   } catch (error) {

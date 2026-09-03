@@ -48,14 +48,18 @@ export async function POST(request: Request) {
 
     const circleData = (await circleResponse.json()) as {
       data?: { challengeId?: string };
-      error?: { message?: string; code?: number };
+      error?: { message?: string; code?: number | string; details?: unknown };
     };
 
     console.log("Circle contractExecution response:", JSON.stringify(circleData, null, 2));
 
     if (!circleResponse.ok) {
       return NextResponse.json(
-        { error: circleData.error?.message ?? "Circle API error", code: circleData.error?.code },
+        {
+          error: circleData.error?.message ?? `Circle API HTTP ${circleResponse.status}`,
+          code: circleData.error?.code,
+          details: circleData.error?.details,
+        },
         { status: circleResponse.status },
       );
     }
