@@ -1,15 +1,27 @@
+import { initiateUserControlledWalletsClient } from "@circle-fin/user-controlled-wallets";
 import { NextResponse } from "next/server";
+
+type CircleTransaction = {
+  id?: string;
+  state?: string;
+  txHash?: string;
+  blockHeight?: string;
+  operation?: string;
+};
 
 export async function POST(request: Request) {
   try {
-    const { transactionId, challengeId, userToken } = (await request.json()) as {
+    const body = (await request.json()) as {
+      walletId?: string;
       transactionId?: string;
-      challengeId?: string;
       userToken?: string;
     };
+    const walletId = body.walletId;
+    const transactionId = body.transactionId;
+    const userToken = body.userToken ?? request.headers.get("x-user-token") ?? undefined;
 
-    if ((!transactionId && !challengeId) || !userToken) {
-      return NextResponse.json({ error: "Transaction ID or challenge ID and user token are required." }, { status: 400 });
+    if (!walletId || !userToken) {
+      return NextResponse.json({ error: "walletId and userToken are required." }, { status: 400 });
     }
 
     const apiKey = process.env.CIRCLE_API_KEY;
@@ -17,58 +29,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Circle API key is not configured." }, { status: 500 });
     }
 
-    let url = "";
-    if (transactionId) {
-      url = `https://api.circle.com/v1/w3s/user/transactions/${encodeURIComponent(transactionId)}`;
-    } else {
-      // The request guard above guarantees challengeId when transactionId is absent.
-      url = `https://api.circle.com/v1/w3s/user/transactions?challengeIds=${encodeURIComponent(challengeId!)}`;
-    }
-
-    console.log("Polling with:", { url, userToken: userToken?.substring(0, 20) + "..." });
-
-    const circleResponse = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "X-User-Token": userToken,
-      },
+    const client = initiateUserControlledWalletsClient({ apiKey });
+    const response = await client.listTransactions({
+      userToken,
+      operation: "CONTRACT_EXECUTION",
+      walletIds: [walletId],
+      pageSize: 5,
+      order: "DESC",
+    });
+    const transactions = response.data?.transactions as CircleTransaction[] | undefined;
+    const transaction = Array.isArray(transactions)
+      ? transactions.find((candidate) => !transactionId || candidate.id === transactionId)
+      : undefined;
+    const state = transaction?.state ?? "PENDING";
+    const txHash = transaction?.txHash;
+    console.log("[EQUB TX POLL] Transaction state", {
+      walletId,
+      requestedTransactionId: transactionId,
+      transactionId: transaction?.id,
+      state,
+      txHash: txHash ?? "not yet available",
     });
 
-    const circleData = (await circleResponse.json()) as {
-      data?: { 
-        transaction?: { state?: string; txHash?: string };
-        transactions?: Array<{ state?: string; txHash?: string }>;
-      };
-      error?: { message?: string; code?: number | string; details?: unknown };
-    };
-
-    console.log("Circle transaction-status response:", JSON.stringify(circleData, null, 2));
-
-    if (!circleResponse.ok) {
-      return NextResponse.json(
-        {
-          error: circleData.error?.message ?? `Circle transaction-status HTTP ${circleResponse.status}`,
-          code: circleData.error?.code,
-          details: circleData.error?.details,
-        },
-        { status: circleResponse.status },
-      );
+    if (!transaction) return NextResponse.json({ state: "PENDING", txHash: null });
+    if (["FAILED", "DENIED", "CANCELLED"].includes(state)) {
+      return NextResponse.json({ state, txHash: txHash ?? null, errorReason: "Circle transaction failed." });
     }
-
-    const tx = circleData.data?.transaction ?? circleData.data?.transactions?.[0];
-    const state = tx?.state;
-    const txHash = tx?.txHash;
-
-    if (!state) {
-      return NextResponse.json({ error: "Circle returned no transaction state.", data: circleData.data }, { status: 502 });
-    }
-
-    return NextResponse.json({ state, txHash });
+    return NextResponse.json({ state, txHash: txHash ?? null, blockHeight: transaction.blockHeight, operation: transaction.operation });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to check transaction status." },
-      { status: 500 },
-    );
+    const message = error instanceof Error ? error.message : "Unable to check transaction status.";
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

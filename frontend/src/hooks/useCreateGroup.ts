@@ -18,7 +18,7 @@ import { EqubFactory, FACTORY_ADDRESS } from "@/src/lib/contract";
 
 export function useCreateGroup() {
   const router = useRouter();
-  const { walletAddress, userToken, encryptionKey, refreshUserToken } = useCircleContext();
+  const { walletAddress, userToken, encryptionKey, userId, refreshUserToken } = useCircleContext();
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,11 +50,19 @@ export function useCreateGroup() {
       return;
     }
 
+    if (!userId) {
+      setError("Your Circle user ID is missing. Please sign in with your email again");
+      setIsLoading(false);
+      return;
+    }
+
     // Guard: Verify user is on Arc Testnet and has ARC balance
     if (typeof window !== "undefined") {
       try {
-        const balance = await publicClient.getBalance({ address: walletAddress as `0x${string}` });
-        if (balance === BigInt(0)) {
+        const balanceResponse = await fetch(`/api/arc/balance?address=${encodeURIComponent(walletAddress)}`);
+        const balanceData = (await balanceResponse.json()) as { balance?: string; error?: string };
+        if (!balanceResponse.ok) throw new Error(balanceData.error ?? "Unable to verify Arc balance.");
+        if (balanceData.balance === "0x0") {
           setError("Your Circle wallet has no ARC on Arc Testnet. Request Arc testnet funds first");
           setIsLoading(false);
           return;
@@ -67,42 +75,57 @@ export function useCreateGroup() {
     }
 
     try {
+      const refreshedSession = await refreshUserToken();
+      if (!refreshedSession) {
+        throw new Error("Unable to refresh Circle session. Please sign in again.");
+      }
+      const activeUserToken = refreshedSession.userToken;
+      const activeEncryptionKey = refreshedSession.encryptionKey;
+
       // Fetch Circle walletId (the UUID, not the wallet address)
-      const walletIdResponse = await fetch(
-        `/api/circle/wallet-id?userToken=${encodeURIComponent(userToken)}`,
-        { method: "GET" },
-      );
+      const cachedWalletId = window.localStorage.getItem("circle_wallet_id");
+      const walletIdResponse = cachedWalletId
+        ? null
+        : await fetch("/api/circle/wallet-id", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId }),
+          });
 
-      const walletIdData = (await walletIdResponse.json()) as { walletId?: string; error?: string };
+      const walletIdData = cachedWalletId
+        ? { walletId: cachedWalletId }
+        : (await walletIdResponse!.json()) as { walletId?: string; walletAddress?: string; error?: string };
 
-      if (!walletIdResponse.ok || !walletIdData.walletId) {
+      if ((walletIdResponse && !walletIdResponse.ok) || !walletIdData.walletId) {
         throw new Error(walletIdData.error ?? "Unable to fetch wallet ID. Please try again.");
       }
 
       const walletId = walletIdData.walletId;
+      window.localStorage.setItem("circle_wallet_id", walletId);
+      if (walletIdData.walletAddress) window.localStorage.setItem("circle_wallet_address", walletIdData.walletAddress);
       console.log("STEP 2: Circle wallet ready", { walletId, walletAddress });
 
       // Prepare function parameters
-      const amountInUnits = parseUnits(String(contributionAmount), 6);
+      const contributionAmountInWei = parseUnits(String(contributionAmount), 6);
       const abiParameters = [
         name,
-        amountInUnits.toString(),
+        contributionAmountInWei.toString(),
         maxMembers.toString(),
         interval.toString(),
         isPrivate.toString(),
       ];
 
       const challengeId = await getContractChallengeId({
-        userToken,
+        userToken: activeUserToken,
         walletId,
         contractAddress: FACTORY_ADDRESS,
-        abiFunctionSignature: "createGroup(string,uint256,uint256,uint256,bool)",
+        abiFunctionSignature: "createGroup(string,uint256,uint32,uint8,bool)",
         abiParameters,
       });
       console.log("STEP 3: Contract execution challenge created", { challengeId, contractAddress: FACTORY_ADDRESS });
 
       // Wait for the approval modal to finish before polling for the transaction result.
-      await executeChallenge(challengeId, userToken, encryptionKey, (error, result) => {
+      await executeChallenge(challengeId, activeUserToken, activeEncryptionKey, (error, result) => {
         if (error) {
           console.error("Circle approval challenge failed:", error);
           return;
@@ -110,7 +133,7 @@ export function useCreateGroup() {
         console.log("Circle approval completed:", result);
       });
 
-      const hash = await pollTransactionStatus(challengeId, userToken);
+      const hash = await pollTransactionStatus(walletId, activeUserToken, { maxAttempts: 30, intervalMs: 2000 });
 
       if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
         throw new Error(`Circle returned an invalid transaction hash: ${hash || "empty"}`);
@@ -119,10 +142,24 @@ export function useCreateGroup() {
 
       setTxHash(hash);
 
-      // Wait for transaction to be confirmed on-chain
+      // Wait for transaction to be confirmed on-chain through the server-side Arc proxy.
       console.log("STEP 5: Waiting for transaction receipt...");
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: hash as `0x${string}` });
-      console.log("STEP 6: Receipt status:", receipt.status, { transactionHash: receipt.transactionHash, blockNumber: receipt.blockNumber });
+      let receipt: Awaited<ReturnType<typeof publicClient.waitForTransactionReceipt>> | null = null;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const receiptResponse = await fetch("/api/arc/receipt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ txHash: hash }),
+        });
+        const receiptData = (await receiptResponse.json()) as { receipt?: unknown; error?: string };
+        if (receiptData.receipt && typeof receiptData.receipt === "object") {
+          receipt = receiptData.receipt as Awaited<ReturnType<typeof publicClient.waitForTransactionReceipt>>;
+          break;
+        }
+      }
+      if (!receipt) throw new Error(`Arc transaction receipt not found after 60s. txHash: ${hash}`);
+      console.log("STEP 7: Receipt success:", receipt.status, { transactionHash: receipt.transactionHash, blockNumber: receipt.blockNumber });
       if (receipt.status !== "success") {
         throw new Error(`Transaction reverted; receipt status: ${receipt.status}; transaction hash: ${hash}`);
       }
@@ -141,20 +178,20 @@ export function useCreateGroup() {
       try {
         const decoded = decodeEventLog({ abi: EqubFactory, eventName: "GroupCreated", data: groupCreatedLog.data, topics: groupCreatedLog.topics });
         decodedGroup = (decoded.args as { group?: string }).group;
-        console.log("STEP 7: Logs decoded", decoded);
+        console.log("STEP 8: GroupCreated decoded", decoded);
       } catch (decodeError) {
         throw new Error(`Unable to decode GroupCreated event; receipt status: ${receipt.status}; transaction hash: ${hash}; cause: ${formatCircleError(decodeError)}`);
       }
       if (!decodedGroup || !/^0x[0-9a-fA-F]{40}$/.test(decodedGroup)) {
         throw new Error(`GroupCreated event did not contain a valid group address; transaction hash: ${hash}`);
       }
-      console.log("STEP 8: Group address extracted:", decodedGroup);
+      console.log("Group address extracted:", decodedGroup);
 
       clearFactoryCache();
       clearRegistryCache();
       setIsSuccess(true);
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      router.push(`/group/${decodedGroup}`);
+      router.push("/my-equbs");
     } catch (caughtError) {
       const errorMessage = formatCircleError(caughtError);
       console.error("Create Equb pipeline failed (original):", caughtError);
@@ -183,7 +220,7 @@ export function useCreateGroup() {
     } finally {
       setIsLoading(false);
     }
-  }, [encryptionKey, refreshUserToken, router, userToken, walletAddress]);
+  }, [encryptionKey, refreshUserToken, router, userId, userToken, walletAddress]);
 
   return { createGroup, isLoading, isSuccess, error, txHash };
 }

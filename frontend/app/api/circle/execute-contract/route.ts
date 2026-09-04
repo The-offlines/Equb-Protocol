@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       abiParameters?: unknown[];
     };
 
-    if (!userToken || !walletId || !contractAddress || !abiFunctionSignature) {
+    if (!userToken || !walletId || !contractAddress || !abiFunctionSignature || !Array.isArray(abiParameters)) {
       return NextResponse.json({ error: "Contract execution details are required." }, { status: 400 });
     }
 
@@ -26,48 +26,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Circle API key is not configured." }, { status: 500 });
     }
 
-    const circleResponse = await fetch(
-      "https://api.circle.com/v1/w3s/user/transactions/contractExecution",
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "X-User-Token": userToken,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          idempotencyKey: crypto.randomUUID(),
-          walletId,
-          contractAddress,
-          abiFunctionSignature,
-          abiParameters,
-          feeLevel: "HIGH",
-        }),
-      },
-    );
+    const client = initiateUserControlledWalletsClient({ apiKey });
+    const circleResponse = await client.createUserTransactionContractExecutionChallenge({
+      userToken,
+      walletId,
+      contractAddress,
+      abiFunctionSignature,
+      abiParameters: abiParameters as never[],
+      fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+      idempotencyKey: crypto.randomUUID(),
+    });
 
-    const circleData = (await circleResponse.json()) as {
+    const circleData = circleResponse as {
       data?: { challengeId?: string };
-      error?: { message?: string; code?: number | string; details?: unknown };
     };
-
-    console.log("Circle contractExecution response:", JSON.stringify(circleData, null, 2));
-
-    if (!circleResponse.ok) {
-      return NextResponse.json(
-        {
-          error: circleData.error?.message ?? `Circle API HTTP ${circleResponse.status}`,
-          code: circleData.error?.code,
-          details: circleData.error?.details,
-        },
-        { status: circleResponse.status },
-      );
-    }
 
     const challengeId = circleData.data?.challengeId;
     if (!challengeId) {
       return NextResponse.json({ error: "Circle did not return a challenge ID." }, { status: 502 });
     }
+    console.log("[EQUB CREATE] Challenge created", { challengeId });
 
     return NextResponse.json({ challengeId });
   } catch (error) {

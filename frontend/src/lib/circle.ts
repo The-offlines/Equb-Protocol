@@ -106,6 +106,7 @@ export function executeChallenge(
 
       // updateConfigs() is synchronous in @circle-fin/w3s-pw-web-sdk 1.1.x.
       // Waiting for a callback here prevents execute() from ever being called.
+      circleSdk.updateConfigs({ appSettings: { appId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID ?? "" } });
       circleSdk.setAuthentication({ userToken, encryptionKey });
       console.log("STEP 4: Calling sdk.execute...");
 
@@ -115,7 +116,11 @@ export function executeChallenge(
         reject(error);
       }, 10 * 60 * 1000);
 
-      circleSdk.execute(challengeId, (executeError: any, result: any) => {
+      const executeWithChallengeIds = circleSdk.execute as unknown as (
+        challengeIds: string[],
+        callback: (executeError: any, result: any) => void,
+      ) => void;
+      executeWithChallengeIds([challengeId], (executeError: any, result: any) => {
         console.log("STEP 5: Circle approval callback called:", result ?? executeError);
         if (timeoutId !== undefined) window.clearTimeout(timeoutId);
         if (executeError) {
@@ -138,44 +143,42 @@ export function executeChallenge(
   });
 }
 
-export async function pollTransactionStatus(challengeId: string, userToken: string): Promise<string> {
+export async function pollTransactionStatus(walletId: string, userToken: string, {
+  maxAttempts = 45,
+  intervalMs = 2000,
+}: { maxAttempts?: number; intervalMs?: number } = {}): Promise<string> {
   console.log("STEP 6: Polling transaction status...");
-  for (let i = 0; i < 60; i++) {
-    await new Promise((r) => setTimeout(r, 3000));
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, intervalMs));
 
-    const res = await fetch("/api/circle/transaction-status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ challengeId, userToken }),
-    });
+    const res = await fetch(`/api/circle/transactions?userToken=${encodeURIComponent(userToken)}&walletId=${encodeURIComponent(walletId)}`);
 
     const data = (await res.json()) as {
       state?: string;
-      txHash?: string;
+      transactions?: Array<{ state?: string; txHash?: string; errorReason?: string }>;
       error?: string;
-      code?: string | number;
-      details?: unknown;
     };
-    console.log(`Poll ${i}:`, data.state, data.txHash ?? data.error ?? "");
+    const transaction = data.transactions?.[0];
+    const state = transaction?.state ?? "PENDING";
+    const txHash = transaction?.txHash;
+    console.log(`Poll ${i}:`, state, txHash ?? data.error ?? "");
 
     if (!res.ok) {
-      const detail = data.details === undefined ? "" : `; details: ${JSON.stringify(data.details)}`;
       throw new Error(
-        `${data.error ?? `Circle transaction-status HTTP ${res.status}`}${data.code ? ` (code: ${data.code})` : ""}${detail}`,
+        data.error ?? `Circle transactions HTTP ${res.status}`,
       );
     }
 
-    if (data.state === "COMPLETE" && data.txHash) {
-      console.log("STEP 7: Circle transaction complete; transaction hash:", data.txHash);
-      return data.txHash;
+    if (state === "COMPLETE" && txHash) {
+      console.log("STEP 6: Transaction hash:", txHash);
+      return txHash;
     }
-    const terminalFailureState = data.state;
-    if (["FAILED", "DENIED", "EXPIRED", "CANCELLED"].includes(terminalFailureState ?? "")) {
-      throw new Error(`Circle transaction ${terminalFailureState?.toLowerCase() ?? "failed"}.`);
+    if (["FAILED", "DENIED", "CANCELLED"].includes(state)) {
+      throw new Error(`Circle transaction ${state.toLowerCase()}${transaction?.errorReason ? `: ${transaction.errorReason}` : ""}.`);
     }
   }
 
-  throw new Error("Transaction timed out. Check Arc Scan for status.");
+  throw new Error(`Transaction polling timed out after ${maxAttempts * intervalMs / 1000}s`);
 }
 
 export async function executeEmbeddedContractTransaction({
@@ -196,7 +199,7 @@ export async function executeEmbeddedContractTransaction({
 
   await executeChallenge(challengeId, userToken, encryptionKey);
 
-  return pollTransactionStatus(challengeId, userToken);
+  return pollTransactionStatus(walletId, userToken);
 }
 
 export { sdk };

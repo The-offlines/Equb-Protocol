@@ -5,7 +5,7 @@ export async function POST(request: Request) {
   try {
     const { email, userId: requestedUserId } = (await request.json()) as { email?: string; userId?: string };
     const normalizedEmail = email?.trim().toLowerCase();
-    const userId = requestedUserId?.trim() || (normalizedEmail ? `equb-${normalizedEmail}` : "");
+    const userId = requestedUserId?.trim() || normalizedEmail || "";
 
     if (!userId) {
       return NextResponse.json({ error: "Email or user ID is required." }, { status: 400 });
@@ -38,10 +38,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Circle did not return user credentials." }, { status: 502 });
     }
 
+    const walletsResponse = await client.listWallets({ userToken: tokenData.userToken });
+    const wallet = walletsResponse.data?.wallets?.[0];
+
     return NextResponse.json({
       userToken: tokenData.userToken,
       encryptionKey: tokenData.encryptionKey,
       userId,
+      walletId: wallet?.id ?? null,
+      walletAddress: wallet?.address ?? null,
     });
   } catch (error) {
     console.error("Circle session error:", error);

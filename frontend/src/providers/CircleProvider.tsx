@@ -7,6 +7,7 @@ import { initCircleSdk } from "@/src/lib/circle";
 import { publicClient } from "@/src/lib/arc";
 
 const STORAGE_KEY = "equb-circle-session";
+const USER_ID_STORAGE_KEY = "circle_user_id";
 
 type CircleSession = {
   walletAddress: string;
@@ -73,7 +74,7 @@ export function CircleProvider({ children }: { children: ReactNode }) {
           setWalletAddress(session.walletAddress || null);
           setUserToken(session.userToken ?? null);
           setEncryptionKey(session.encryptionKey ?? null);
-          setUserId(session.userId ?? null);
+          setUserId(session.userId ?? window.localStorage.getItem(USER_ID_STORAGE_KEY));
         }
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
@@ -119,10 +120,12 @@ export function CircleProvider({ children }: { children: ReactNode }) {
     window.localStorage.removeItem(STORAGE_KEY);
 
     try {
-      const session = await postJson<{ userToken: string; encryptionKey: string; userId: string }>("/api/circle/session", { email });
+      const session = await postJson<{ userToken: string; encryptionKey: string; userId: string; walletId?: string | null }>("/api/circle/session", { email });
       setUserToken(session.userToken);
       setEncryptionKey(session.encryptionKey);
       setUserId(session.userId);
+      window.localStorage.setItem(USER_ID_STORAGE_KEY, session.userId);
+      if (session.walletId) window.localStorage.setItem("circle_wallet_id", session.walletId);
       const circleSdk = initCircleSdk();
       if (!circleSdk) throw new Error("Circle authentication is only available in the browser.");
       const deviceId = await circleSdk.getDeviceId();
@@ -147,9 +150,11 @@ export function CircleProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const session = await postJson<{ userToken: string; encryptionKey: string; userId: string }>("/api/circle/session", { userId });
+      const session = await postJson<{ userToken: string; encryptionKey: string; userId: string; walletId?: string | null }>("/api/circle/session", { userId });
       setUserToken(session.userToken);
       setEncryptionKey(session.encryptionKey);
+      window.localStorage.setItem(USER_ID_STORAGE_KEY, session.userId);
+      if (session.walletId) window.localStorage.setItem("circle_wallet_id", session.walletId);
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ walletAddress, userToken: session.userToken, encryptionKey: session.encryptionKey, userId: session.userId }));
       return { userToken: session.userToken, encryptionKey: session.encryptionKey };
     } catch (caughtError) {
@@ -247,6 +252,7 @@ export function CircleProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => {
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(USER_ID_STORAGE_KEY);
     setWalletAddress(null);
     setUserToken(null);
     setEncryptionKey(null);
