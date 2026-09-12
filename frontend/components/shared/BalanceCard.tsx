@@ -18,13 +18,13 @@ export function BalanceCard() {
         <div>
           <p className="text-sm font-medium text-[#6C6885]">Wallet Balance</p>
           <p className="mt-3 text-3xl font-black tracking-[-0.06em] text-[#1F1B3A]">
-            {balance} USDC
+            {walletAddress ? `${balance} USDC` : "Connect wallet"}
           </p>
         </div>
 
-        <span className="inline-flex items-center gap-2 rounded-full bg-[#3BB273]/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1F8A4D]">
-          <span className="h-2 w-2 rounded-full bg-[#3BB273]" />
-          Arc Testnet
+        <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${walletAddress ? "bg-[#3BB273]/15 text-[#1F8A4D]" : "bg-[#1F1B3A]/5 text-[#6C6885]"}`}>
+          <span className={`h-2 w-2 rounded-full ${walletAddress ? "bg-[#3BB273]" : "bg-[#9A96AA]"}`} />
+          {walletAddress ? "Arc Testnet" : "Not connected"}
         </span>
       </div>
 

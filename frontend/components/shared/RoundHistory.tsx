@@ -21,13 +21,20 @@ export function RoundHistory({ winners }: RoundHistoryProps) {
         Previous Winners
       </h2>
 
-      <div className="mt-5 space-y-4">
-        {winners.map((winner, index) => (
-          <div key={`${winner.round}-${winner.name}`} className={index < winners.length - 1 ? "pb-4" : ""}>
-            <WinnerCard winner={winner} />
-          </div>
-        ))}
-      </div>
+      {winners.length > 0 ? (
+        <div className="mt-5 space-y-4">
+          {winners.map((winner, index) => (
+            <div key={`${winner.round}-${winner.name}`} className={index < winners.length - 1 ? "pb-4" : ""}>
+              <WinnerCard winner={winner} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 rounded-2xl border border-dashed border-[#1F1B3A]/12 bg-[#F8F7F5] px-4 py-6 text-center">
+          <p className="text-sm font-semibold text-[#1F1B3A]">No completed rounds yet</p>
+          <p className="mt-1 text-xs leading-5 text-[#6C6885]">Winner history will appear here after the first round is completed.</p>
+        </div>
+      )}
     </motion.section>
   );
 }

@@ -6,8 +6,8 @@ import { getAddress, type Address } from "viem";
 
 import { useCircleContext } from "@/src/providers/CircleProvider";
 import { publicClient } from "@/src/lib/arc";
-import { executeEmbeddedContractTransaction } from "@/src/lib/circle";
-import { EqubGroup } from "@/src/lib/contract";
+import { executeEmbeddedContractTransaction, getCircleWalletId } from "@/src/lib/circle";
+import { clearCache as clearFactoryCache } from "@/src/hooks/useFactory";
 
 export function useJoinGroup() {
   const router = useRouter();
@@ -29,11 +29,12 @@ export function useJoinGroup() {
 
     try {
       const address = getAddress(groupAddress) as Address;
+      const walletId = await getCircleWalletId(userToken, walletAddress);
 
       const hash = await executeEmbeddedContractTransaction({
         userToken,
         encryptionKey,
-        walletId: walletAddress,
+        walletId,
         contractAddress: address,
         abiFunctionSignature: "joinGroup()",
         abiParameters: [],
@@ -42,6 +43,7 @@ export function useJoinGroup() {
       if (receipt.status === "reverted") throw new Error("Transaction reverted.");
 
       setIsSuccess(true);
+      clearFactoryCache();
       window.dispatchEvent(new Event("equb-data-updated"));
       window.sessionStorage.setItem("equb_join_success", address);
       window.setTimeout(() => router.push(`/group/${address}`), 2000);

@@ -5,8 +5,6 @@ import { Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useCircleContext } from "@/src/providers/CircleProvider";
-import { useGroup } from "@/src/hooks/useGroup";
-import { useTreasury } from "@/src/hooks/useTreasury";
 import { publicClient } from "@/src/lib/arc";
 import { EqubGroup } from "@/src/lib/contract";
 import { formatUsdcAmount } from "@/src/lib/format";
@@ -39,8 +37,6 @@ export function ContributeModal({
   round,
 }: ContributeModalProps) {
   const { walletAddress } = useCircleContext();
-  const { refetch: refetchTreasury } = useTreasury(groupAddress);
-  const { refetch: refetchGroup } = useGroup(groupAddress);
   const [liveAmount, setLiveAmount] = useState(amount);
 
   useEffect(() => {
@@ -60,11 +56,9 @@ export function ContributeModal({
 
   useEffect(() => {
     if (!isSuccess) return;
-    void refetchTreasury();
-    void refetchGroup();
     const timeoutId = window.setTimeout(onClose, 2000);
     return () => window.clearTimeout(timeoutId);
-  }, [isSuccess, onClose, refetchGroup, refetchTreasury]);
+  }, [isSuccess, onClose]);
 
   const shortTxHash = txHash ? `${txHash.slice(0, 6)}...${txHash.slice(-4)}` : "";
   return (
@@ -74,6 +68,9 @@ export function ContributeModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contribution-dialog-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-[#1F1B3A]/40 p-4 backdrop-blur-sm"
           onClick={onClose}
         >
@@ -90,7 +87,7 @@ export function ContributeModal({
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5A4BDB]">
                   Contribute
                 </p>
-                <h3 className="mt-2 text-2xl font-black tracking-[-0.05em] text-[#1F1B3A]">
+                <h3 id="contribution-dialog-title" className="mt-2 text-2xl font-black tracking-[-0.05em] text-[#1F1B3A]">
                   {groupName}
                 </h3>
               </div>

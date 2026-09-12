@@ -1,184 +1,110 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Activity, Plus, UserPlus } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { ArrowRight, CirclePlus, Compass, LockKeyhole, RefreshCw, Users, WalletCards } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
 
 import AppShell from "@/components/layout/AppShell";
 import { AnalyticsCard } from "@/components/shared/AnalyticsCard";
 import { BalanceCard } from "@/components/shared/BalanceCard";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Button } from "@/components/ui/Button";
 import { useFactory } from "@/src/hooks/useFactory";
-import { formatUsdcAmount } from "@/src/lib/format";
-
-// TODO: replace with real profile name from wallet
-const userName = "Coner";
-
-const quickActions = [
-  {
-    title: "Create Equb",
-    description: "Launch a new savings circle with your group.",
-    icon: Plus,
-    route: "/create",
-  },
-  {
-    title: "Join Equb",
-    description: "Browse active circles and request to join.",
-    icon: UserPlus,
-    route: "/join",
-  },
-  {
-    title: "View Activity",
-    description: "Check recent payouts, contributions, and updates.",
-    icon: Activity,
-    route: "/my-equbs",
-  },
-];
+import { formatUsdcAmount, formatUsdcDisplay } from "@/src/lib/format";
 
 export default function DashboardPage() {
-  const { groups, totalGroups, isLoading, error } = useFactory();
-  const router = useRouter();
-  const totalSaved = groups.reduce(
-    (sum, g) => sum + formatUsdcAmount(g.contributionAmount),
-    0,
-  );
+  const { groups, totalGroups, isLoading, error, refetch } = useFactory();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const stats = [
-    {
-      label: "Total Groups",
-      value: String(Number(totalGroups)),
-      description: "Groups currently on Arc Testnet",
-      icon: Activity,
-    },
-    {
-      label: "Active Equbs",
-      value: String(groups.length),
-      description: "Groups returned by the factory",
-      icon: Plus,
-    },
-    {
-      label: "Total Saved",
-      value: `$${totalSaved.toLocaleString()} USDC`,
-      description: "Combined contribution amounts",
-      icon: Activity,
-    },
-    {
-      label: "Private Circles",
-      value: String(groups.filter((group) => group.isPrivate).length),
-      description: "Invite-only rounds",
-      icon: UserPlus,
-    },
-    {
-      label: "Next Contribution",
-      value: groups[0]
-        ? `${Number(groups[0].contributionAmount / BigInt(10 ** 18)).toLocaleString()} USDC`
-        : "N/A",
-      description: "Latest factory entry",
-      icon: Plus,
-    },
-  ];
+  const totalPool = groups.reduce((sum, group) => sum + formatUsdcAmount(group.contributionAmount), 0);
+  const privateGroups = groups.filter((group) => group.isPrivate).length;
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (isLoading) {
-    return (
-      <AppShell>
-        <LoadingSpinner label="Loading Arc dashboard..." />
-      </AppShell>
-    );
+    return <AppShell><LoadingSpinner label="Loading the Arc workspace..." /></AppShell>;
   }
 
   if (error) {
-    return (
-      <AppShell>
-        <ErrorState message={error} />
-      </AppShell>
-    );
+    return <AppShell><ErrorState message={error} onRetry={() => void refetch()} /></AppShell>;
   }
 
   return (
     <AppShell>
-      <div className="space-y-8 pb-10">
+      <div className="mx-auto max-w-[1320px] space-y-8 pb-10">
         <motion.section
-          initial={{ opacity: 0, y: 18 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-          className="rounded-3xl bg-gradient-to-r from-[#5A4BDB] to-[#7C6EF4] p-6 text-white shadow-[0_20px_45px_rgba(90,75,219,0.22)]"
+          transition={{ duration: 0.28, ease: "easeOut" }}
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#5A4BDB] via-[#6556E8] to-[#8579F5] p-6 text-white shadow-[0_20px_45px_rgba(90,75,219,0.22)] sm:p-8"
         >
-          <div className="flex items-center justify-between gap-6">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">
-                Overview
-              </p>
-              <h1 className="mt-2 text-3xl font-black tracking-[-0.06em] md:text-4xl">
-                Good morning, {userName} 👋
-              </h1>
-              <p className="mt-2 text-sm text-white/80 md:text-base">
-                Here&apos;s what&apos;s happening with your Equbs today.
-              </p>
+          <div className="pointer-events-none absolute -right-20 -top-28 h-64 w-64 rounded-full border-[30px] border-white/10" />
+          <div className="relative flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/70">Arc workspace</p>
+              <h1 className="mt-3 text-3xl font-black tracking-[-0.07em] sm:text-4xl">Build a rhythm that lasts.</h1>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-white/80 sm:text-base">Create a circle, invite your people, and keep every contribution easy to follow.</p>
             </div>
-
-            <div className="hidden h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-2xl font-black shadow-inner sm:flex">
-              E
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" onClick={() => void handleRefresh()} disabled={isRefreshing} className="gap-2 border-white/25 bg-white/10 text-white hover:bg-white/20">
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} aria-hidden="true" />{isRefreshing ? "Refreshing" : "Refresh"}
+              </Button>
+              <Link href="/create" className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-[#5A4BDB] transition hover:bg-[#F0ECFF]"><CirclePlus className="h-4 w-4" aria-hidden="true" />Create Equb</Link>
             </div>
           </div>
         </motion.section>
 
-        <BalanceCard />
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
+          <BalanceCard />
+          <section className="rounded-3xl border border-[#1F1B3A]/8 bg-white p-5 shadow-[0_14px_35px_rgba(31,27,58,0.05)] sm:p-6" aria-labelledby="start-heading">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#5A4BDB]">Start here</p>
+            <h2 id="start-heading" className="mt-2 text-xl font-black tracking-[-0.05em] text-[#1F1B3A]">What would you like to do?</h2>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+              <Link href="/create" className="group flex items-center gap-3 rounded-2xl border border-[#1F1B3A]/8 p-3 transition hover:border-[#5A4BDB]/30 hover:bg-[#F8F6FF]"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F0ECFF] text-[#5A4BDB]"><CirclePlus className="h-4 w-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block text-sm font-bold">Create a circle</span><span className="block text-xs text-[#6C6885]">Set your group rules</span></span><ArrowRight className="h-4 w-4 text-[#9A96AA] transition group-hover:translate-x-0.5 group-hover:text-[#5A4BDB]" aria-hidden="true" /></Link>
+              <Link href="/join" className="group flex items-center gap-3 rounded-2xl border border-[#1F1B3A]/8 p-3 transition hover:border-[#5A4BDB]/30 hover:bg-[#F8F6FF]"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#EAF8F1] text-[#1F8A4D]"><Users className="h-4 w-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block text-sm font-bold">Join a circle</span><span className="block text-xs text-[#6C6885]">Use an invite code</span></span><ArrowRight className="h-4 w-4 text-[#9A96AA] transition group-hover:translate-x-0.5 group-hover:text-[#5A4BDB]" aria-hidden="true" /></Link>
+            </div>
+          </section>
+        </div>
 
-        <motion.section
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.32, ease: "easeOut", delay: 0.05 }}
-        >
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {stats.map((stat, index) => (
-              <AnalyticsCard
-                key={stat.label}
-                label={stat.label}
-                value={stat.value}
-                description={stat.description}
-                icon={stat.icon}
-                delay={index * 0.06}
-              />
-            ))}
+        <section aria-labelledby="metrics-heading">
+          <div className="mb-4"><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6C6885]">At a glance</p><h2 id="metrics-heading" className="mt-1 text-2xl font-black tracking-[-0.06em] text-[#1F1B3A]">Protocol activity</h2></div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <AnalyticsCard label="Total groups" value={String(Number(totalGroups))} description="Groups registered on Arc Testnet" icon={Compass} />
+            <AnalyticsCard label="Contribution volume" value={formatUsdcDisplay(totalPool)} description="Configured contribution amounts" icon={WalletCards} delay={0.05} />
+            <AnalyticsCard label="Private circles" value={String(privateGroups)} description="Invite-only group settings" icon={LockKeyhole} delay={0.1} />
+            <AnalyticsCard label="Network" value="Arc Testnet" description="Native USDC settlement" icon={Users} delay={0.15} />
           </div>
-        </motion.section>
+        </section>
 
-        <motion.section
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.34, ease: "easeOut", delay: 0.1 }}
-          className="space-y-5"
-        >
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold tracking-[-0.05em] text-[#1F1B3A]">
-              Quick Actions
-            </h2>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            {quickActions.map(({ title, description, icon: Icon, route }, index) => (
-              <motion.button
-                key={title}
-                type="button"
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, ease: "easeOut", delay: 0.12 + index * 0.06 }}
-                whileHover={{ y: -2 }}
-                onClick={() => router.push(route)}
-                className="cursor-pointer rounded-2xl border border-[#1F1B3A]/5 bg-white p-5 text-left shadow-[0_12px_30px_rgba(31,27,58,0.04)] transition-colors hover:border-[#5A4BDB]/20 hover:bg-[#F7F5FF]"
-              >
-                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#5A4BDB]/10 text-[#5A4BDB]">
-                  <Icon className="h-5 w-5" />
-                </div>
-                <h3 className="text-lg font-bold tracking-[-0.04em] text-[#1F1B3A]">
-                  {title}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-[#6C6885]">{description}</p>
-              </motion.button>
-            ))}
-          </div>
-        </motion.section>
+        <section aria-labelledby="groups-heading" className="space-y-5">
+          <div className="flex items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6C6885]">Discover</p><h2 id="groups-heading" className="mt-1 text-2xl font-black tracking-[-0.06em] text-[#1F1B3A]">Registered circles</h2></div><Link href="/my-equbs" className="text-sm font-bold text-[#5A4BDB] hover:underline">View yours <span aria-hidden="true">→</span></Link></div>
+          {groups.length > 0 ? (
+            <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+              {groups.slice(0, 3).map((group) => (
+                <Link
+                  key={group.groupAddress}
+                  href={`/group/${group.groupAddress}`}
+                  className="group rounded-3xl border border-[#1F1B3A]/8 bg-white p-5 shadow-[0_12px_30px_rgba(31,27,58,0.04)] transition hover:-translate-y-0.5 hover:border-[#5A4BDB]/25 hover:shadow-[0_18px_36px_rgba(31,27,58,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5A4BDB]/50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0"><p className="truncate text-lg font-bold tracking-[-0.04em] text-[#1F1B3A]">{group.name}</p><p className="mt-1 text-xs text-[#6C6885]">Created circle · {Number(group.interval) === 1 ? "Monthly" : "Weekly"}</p></div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${group.isPrivate ? "bg-[#F0ECFF] text-[#5A4BDB]" : "bg-[#EAF8F1] text-[#1F8A4D]"}`}>{group.isPrivate ? "Private" : "Open"}</span>
+                  </div>
+                  <div className="mt-6 flex items-end justify-between gap-4 border-t border-[#1F1B3A]/8 pt-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#6C6885]">Contribution</p><p className="mt-1 text-xl font-black tracking-[-0.05em] text-[#1F1B3A]">{formatUsdcDisplay(formatUsdcAmount(group.contributionAmount))}</p></div><span className="inline-flex items-center gap-1 text-xs font-bold text-[#5A4BDB]">Open <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" aria-hidden="true" /></span></div>
+                </Link>
+              ))}
+            </div>
+          ) : <div className="rounded-3xl border border-dashed border-[#1F1B3A]/15 bg-white/60 p-10 text-center"><Compass className="mx-auto h-8 w-8 text-[#5A4BDB]" aria-hidden="true" /><p className="mt-4 text-lg font-bold">No groups have been registered yet.</p><p className="mt-1 text-sm text-[#6C6885]">Create the first circle and invite your community.</p></div>}
+        </section>
       </div>
     </AppShell>
   );

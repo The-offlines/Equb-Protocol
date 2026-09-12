@@ -30,7 +30,7 @@ export function EqubGroupCard({
   const normalizedPoolValue =
     formatUsdcAmount(typeof group.poolValue === "bigint" ? group.poolValue : Number(group.poolValue ?? 0));
   const groupAddress = group.groupAddress ?? group.id;
-  const progress = (group.currentRound / group.totalRounds) * 100;
+  const progress = group.maxMembers > 0 ? (group.members / group.maxMembers) * 100 : 0;
 
   return (
     <motion.div
@@ -90,10 +90,12 @@ export function EqubGroupCard({
           <div>
             <p className="text-xs uppercase tracking-[0.12em] text-[#6C6885]">Next payout</p>
             <p className="mt-1 text-lg font-bold text-[#1F1B3A]">
-              {new Date(group.nextPayoutDate).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-              })}
+              {group.nextPayoutDate
+                ? new Date(group.nextPayoutDate).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })
+                : "Not scheduled"}
             </p>
           </div>
         </div>

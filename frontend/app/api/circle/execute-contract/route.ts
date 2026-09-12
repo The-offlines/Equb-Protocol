@@ -26,20 +26,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Circle API key is not configured." }, { status: 500 });
     }
 
-    const client = initiateUserControlledWalletsClient({ apiKey });
-    const circleResponse = await client.createUserTransactionContractExecutionChallenge({
-      userToken,
-      walletId,
-      contractAddress,
-      abiFunctionSignature,
-      abiParameters: abiParameters as never[],
-      fee: { type: "level", config: { feeLevel: "MEDIUM" } },
-      idempotencyKey: crypto.randomUUID(),
-    });
+    const circleResponse = await fetch(
+      "https://api.circle.com/v1/w3s/user/transactions/contractExecution",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "X-User-Token": userToken,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          idempotencyKey: crypto.randomUUID(),
+          walletId,
+          contractAddress,
+          abiFunctionSignature,
+          abiParameters,
+          feeLevel: "HIGH",
+        }),
+      },
+    );
 
-    const circleData = circleResponse as {
+    const circleData = (await circleResponse.json()) as {
       data?: { challengeId?: string };
+      error?: { message?: string; code?: number | string; details?: unknown };
     };
+
+    console.log("Circle contractExecution response:", JSON.stringify(circleData, null, 2));
+
+    if (!circleResponse.ok) {
+      return NextResponse.json(
+        {
+          error: circleData.error?.message ?? `Circle API HTTP ${circleResponse.status}`,
+          code: circleData.error?.code,
+          details: circleData.error?.details,
+        },
+        { status: circleResponse.status },
+      );
+    }
 
     const challengeId = circleData.data?.challengeId;
     if (!challengeId) {

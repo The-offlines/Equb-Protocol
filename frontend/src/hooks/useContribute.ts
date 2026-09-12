@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { getAddress, type Address } from "viem";
+import { getAddress, type Abi, type Address } from "viem";
 
 import { useCircleContext } from "@/src/providers/CircleProvider";
 import { publicClient } from "@/src/lib/arc";
-import { executeEmbeddedContractTransaction } from "@/src/lib/circle";
+import { executeEmbeddedContractTransaction, getCircleWalletId } from "@/src/lib/circle";
 import { EqubGroup } from "@/src/lib/contract";
 
 export function useContribute(groupAddress: string) {
@@ -29,7 +29,7 @@ export function useContribute(groupAddress: string) {
 
     try {
       const address = getAddress(groupAddress) as Address;
-      const abi = EqubGroup as any;
+      const abi = EqubGroup as Abi;
       const contributionAmount = await publicClient.readContract({ address, abi, functionName: "contributionAmount" }) as bigint;
       const memberInfo = await publicClient.readContract({ address, abi, functionName: "memberInfo", args: [walletAddress as Address] }) as readonly [boolean, boolean, boolean, bigint, bigint];
       const isPaid = memberInfo[2];
@@ -56,10 +56,11 @@ export function useContribute(groupAddress: string) {
         return;
       }
 
+      const walletId = await getCircleWalletId(userToken, walletAddress);
       const hash = await executeEmbeddedContractTransaction({
         userToken,
         encryptionKey,
-        walletId: walletAddress,
+        walletId,
         contractAddress: address,
         abiFunctionSignature: "contribute()",
         abiParameters: [],

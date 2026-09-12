@@ -11,6 +11,7 @@ import { publicClient } from "@/src/lib/arc";
 import {
   executeChallenge,
   getContractChallengeId,
+  getCircleWalletId,
   pollTransactionStatus,
   formatCircleError,
 } from "@/src/lib/circle";
@@ -75,38 +76,23 @@ export function useCreateGroup() {
     }
 
     try {
-      const refreshedSession = await refreshUserToken();
-      if (!refreshedSession) {
-        throw new Error("Unable to refresh Circle session. Please sign in again.");
-      }
-      const activeUserToken = refreshedSession.userToken;
-      const activeEncryptionKey = refreshedSession.encryptionKey;
-
       // Fetch Circle walletId (the UUID, not the wallet address)
-      const cachedWalletId = window.localStorage.getItem("circle_wallet_id");
-      const walletIdResponse = cachedWalletId
-        ? null
-        : await fetch("/api/circle/wallet-id", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId }),
-          });
+      const walletIdResponse = await fetch(
+        `/api/circle/wallet-id?userToken=${encodeURIComponent(userToken)}`,
+        { method: "GET" },
+      );
 
-      const walletIdData = cachedWalletId
-        ? { walletId: cachedWalletId }
-        : (await walletIdResponse!.json()) as { walletId?: string; walletAddress?: string; error?: string };
+      const walletIdData = (await walletIdResponse.json()) as { walletId?: string; error?: string };
 
-      if ((walletIdResponse && !walletIdResponse.ok) || !walletIdData.walletId) {
+      if (!walletIdResponse.ok || !walletIdData.walletId) {
         throw new Error(walletIdData.error ?? "Unable to fetch wallet ID. Please try again.");
       }
 
       const walletId = walletIdData.walletId;
-      window.localStorage.setItem("circle_wallet_id", walletId);
-      if (walletIdData.walletAddress) window.localStorage.setItem("circle_wallet_address", walletIdData.walletAddress);
       console.log("STEP 2: Circle wallet ready", { walletId, walletAddress });
 
       // Prepare function parameters
-      const contributionAmountInWei = parseUnits(String(contributionAmount), 6);
+      const amountInUnits = parseUnits(String(contributionAmount), 6);
       const abiParameters = [
         name,
         contributionAmountInWei.toString(),
@@ -125,7 +111,7 @@ export function useCreateGroup() {
       console.log("STEP 3: Contract execution challenge created", { challengeId, contractAddress: FACTORY_ADDRESS });
 
       // Wait for the approval modal to finish before polling for the transaction result.
-      await executeChallenge(challengeId, activeUserToken, activeEncryptionKey, (error, result) => {
+      await executeChallenge(challengeId, userToken, encryptionKey, (error, result) => {
         if (error) {
           console.error("Circle approval challenge failed:", error);
           return;
@@ -133,7 +119,7 @@ export function useCreateGroup() {
         console.log("Circle approval completed:", result);
       });
 
-      const hash = await pollTransactionStatus(walletId, activeUserToken, { maxAttempts: 30, intervalMs: 2000 });
+      const hash = await pollTransactionStatus(challengeId, userToken);
 
       if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
         throw new Error(`Circle returned an invalid transaction hash: ${hash || "empty"}`);

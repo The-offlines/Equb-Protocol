@@ -5,12 +5,22 @@ declare module "@circle-fin/w3s-pw-web-sdk" {
   interface W3SSdk {
     // Kept for compatibility with older SDK builds. The installed SDK uses
     // the callback passed directly to execute().
-    setOnSuccess?(callback: (result: any) => void): void;
-    setOnError?(callback: (error: any) => void): void;
+    setOnSuccess?(callback: (result: unknown) => void): void;
+    setOnError?(callback: (error: unknown) => void): void;
   }
 }
 
 let sdk: W3SSdk | null = null;
+
+type CircleChallengeError = {
+  message: string;
+  code?: unknown;
+};
+
+type ChallengeCompleteHandler = (
+  error: CircleChallengeError | undefined,
+  result?: unknown,
+) => void | Promise<void>;
 
 export function initCircleSdk() {
   if (typeof window === "undefined") {
@@ -42,6 +52,20 @@ export type ExecuteContractTxRequest = {
   abiParameters: string[];
 };
 
+export async function getCircleWalletId(userToken: string, walletAddress?: string): Promise<string> {
+  const response = await fetch("/api/circle/wallet-id", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userToken, walletAddress }),
+  });
+  const payload = (await response.json()) as { walletId?: string; error?: string };
+  if (!response.ok || !payload.walletId) {
+    throw new Error(payload.error ?? "Unable to find your Arc wallet.");
+  }
+
+  return payload.walletId;
+}
+
 export function formatCircleError(error: unknown): string {
   if (error instanceof Error) {
     const details = error.cause ? `; cause: ${formatCircleError(error.cause)}` : "";
@@ -54,6 +78,7 @@ export function formatCircleError(error: unknown): string {
       .map((key) => `${key}: ${typeof value[key] === "string" ? value[key] : JSON.stringify(value[key])}`);
     if (value.cause) parts.push(`cause: ${formatCircleError(value.cause)}`);
     if (parts.length) return parts.join("; ");
+    return "Circle rejected or closed the approval.";
   }
   return typeof error === "string" ? error : "Unknown Circle transaction error.";
 }
@@ -93,8 +118,8 @@ export function executeChallenge(
   challengeId: string,
   userToken: string,
   encryptionKey: string,
-  onCompleted?: (error: any, result?: any) => void,
-): Promise<any> {
+  onCompleted?: ChallengeCompleteHandler,
+): Promise<unknown> {
   return new Promise((resolve, reject) => {
     let timeoutId: number | undefined;
     try {
@@ -116,21 +141,18 @@ export function executeChallenge(
         reject(error);
       }, 10 * 60 * 1000);
 
-      const executeWithChallengeIds = circleSdk.execute as unknown as (
-        challengeIds: string[],
-        callback: (executeError: any, result: any) => void,
-      ) => void;
-      executeWithChallengeIds([challengeId], (executeError: any, result: any) => {
+      circleSdk.execute(challengeId, (executeError: any, result: any) => {
         console.log("STEP 5: Circle approval callback called:", result ?? executeError);
         if (timeoutId !== undefined) window.clearTimeout(timeoutId);
         if (executeError) {
-          console.error("Circle execute challenge error (original):", executeError);
-          onCompleted?.(executeError, result);
-          reject(executeError);
+          const normalizedError = new Error(formatCircleError(executeError));
+          console.warn("Circle approval was not completed:", normalizedError.message);
+          onCompleted?.(normalizedError, result);
+          reject(normalizedError);
           return;
         }
 
-        onCompleted?.(null, result);
+        onCompleted?.(undefined, result);
         resolve(result);
       });
     } catch (error) {
@@ -143,15 +165,16 @@ export function executeChallenge(
   });
 }
 
-export async function pollTransactionStatus(walletId: string, userToken: string, {
-  maxAttempts = 45,
-  intervalMs = 2000,
-}: { maxAttempts?: number; intervalMs?: number } = {}): Promise<string> {
+export async function pollTransactionStatus(challengeId: string, userToken: string): Promise<string> {
   console.log("STEP 6: Polling transaction status...");
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((r) => setTimeout(r, intervalMs));
 
-    const res = await fetch(`/api/circle/transactions?userToken=${encodeURIComponent(userToken)}&walletId=${encodeURIComponent(walletId)}`);
+    const res = await fetch("/api/circle/transaction-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ challengeId, userToken }),
+    });
 
     const data = (await res.json()) as {
       state?: string;
@@ -164,14 +187,15 @@ export async function pollTransactionStatus(walletId: string, userToken: string,
     console.log(`Poll ${i}:`, state, txHash ?? data.error ?? "");
 
     if (!res.ok) {
+      const detail = data.details === undefined ? "" : `; details: ${JSON.stringify(data.details)}`;
       throw new Error(
         data.error ?? `Circle transactions HTTP ${res.status}`,
       );
     }
 
-    if (state === "COMPLETE" && txHash) {
-      console.log("STEP 6: Transaction hash:", txHash);
-      return txHash;
+    if (data.state === "COMPLETE" && data.txHash) {
+      console.log("STEP 7: Circle transaction complete; transaction hash:", data.txHash);
+      return data.txHash;
     }
     if (["FAILED", "DENIED", "CANCELLED"].includes(state)) {
       throw new Error(`Circle transaction ${state.toLowerCase()}${transaction?.errorReason ? `: ${transaction.errorReason}` : ""}.`);

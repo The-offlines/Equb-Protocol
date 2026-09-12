@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -8,8 +7,6 @@ import {
   Users,
   UserPlus,
   Settings,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 
 const items = [
@@ -19,51 +16,45 @@ const items = [
   { label: "Settings", icon: Settings, href: "/settings" },
 ];
 
-export default function Sidebar() {
+type SidebarProps = {
+  mobileMenuOpen?: boolean;
+  onNavigate?: () => void;
+};
+
+export default function Sidebar({ mobileMenuOpen = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
 
   return (
     <aside
-      className="fixed left-0 top-16 z-40 flex h-[calc(100vh-4rem)] flex-col border-r border-gray-200 bg-[#F6F3EC]"
-      style={{ width: collapsed ? 64 : 224, transition: "width 0.3s ease" }}
+      id="dashboard-navigation"
+      aria-label="Dashboard navigation"
+      className={`fixed left-0 top-16 z-40 flex h-[calc(100vh-4rem)] w-56 flex-col border-r border-[#1F1B3A]/10 bg-[#F6F3EC] px-3 py-4 transition-transform duration-200 md:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
     >
-      <div className="flex w-full justify-end p-2">
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F6F3EC] text-[#1F1B3A]"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
+      <div className="mb-5 px-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#6C6885]">Workspace</p>
+        <p className="mt-1 text-xs text-[#9A96AA]">Manage your savings circles</p>
       </div>
 
-      <nav className="mt-2 flex flex-col gap-2">
+      <nav className="flex flex-col gap-1.5">
         {items.map(({ label, icon: Icon, href }) => {
-          const active = pathname === href;
-          const showLabel = !collapsed;
+          const active = pathname === href || (href === "/dashboard" && pathname === "/");
 
           return (
             <Link
               key={href}
               href={href}
+              onClick={onNavigate}
               className={[
-                "mx-2 flex items-center gap-3 rounded-xl px-4 py-3 transition-colors",
+                "flex items-center gap-3 rounded-xl px-3 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5A4BDB]/50",
                 active
-                  ? "bg-[#5A4BDB] text-white"
-                  : "text-[#1F1B3A] hover:bg-[#F6F3EC]",
-                collapsed ? "justify-center px-0" : "justify-start",
+                  ? "bg-[#5A4BDB] text-white shadow-[0_8px_18px_rgba(90,75,219,0.18)]"
+                  : "text-[#1F1B3A] hover:bg-white hover:text-[#5A4BDB]",
               ].join(" ")}
-              style={{ width: collapsed ? 40 : "auto" }}
             >
-              <span className="flex h-5 w-5 items-center justify-center">
-                <Icon size={18} />
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                <Icon size={18} aria-hidden="true" />
               </span>
-
-              {showLabel ? (
-                <span className="whitespace-nowrap text-sm font-medium">{label}</span>
-              ) : null}
+              <span className="whitespace-nowrap text-sm font-semibold">{label}</span>
             </Link>
           );
         })}

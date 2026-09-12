@@ -53,6 +53,17 @@ export type GroupContractData = {
   isPrivate: boolean;
   emergencyMode: boolean;
   members: Address[];
+  memberDetails: GroupContractMember[];
+  currentPool: bigint;
+};
+
+export type GroupContractMember = {
+  address: Address;
+  joined: boolean;
+  receivedPayout: boolean;
+  paidCurrentRound: boolean;
+  joinedRound: number;
+  joinedAt: bigint;
 };
 
 const factoryAbi = factoryArtifact.abi as Abi;

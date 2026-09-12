@@ -38,10 +38,13 @@ export function WalletButton() {
 
   return (
     <div className="relative">
-      <button
-        type="button"
-        onClick={() => setIsProfileOpen((current) => !current)}
-        className="inline-flex items-center gap-2 rounded-full bg-[#1F1B3A] px-3 py-2 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(31,27,58,0.12)] transition-colors hover:bg-[#201a39]"
+        <button
+          type="button"
+          onClick={() => setIsProfileOpen((current) => !current)}
+          aria-expanded={isProfileOpen}
+          aria-haspopup="menu"
+          aria-label="Open wallet profile"
+          className="inline-flex items-center gap-2 rounded-full bg-[#1F1B3A] px-3 py-2 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(31,27,58,0.12)] transition-colors hover:bg-[#201a39]"
       >
         <span className="h-2.5 w-2.5 rounded-full bg-[#3BB273]" />
         <span>{shortenAddress(walletAddress)}</span>

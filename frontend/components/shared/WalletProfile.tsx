@@ -19,9 +19,13 @@ export function WalletProfile({ onClose }: WalletProfileProps) {
       return;
     }
 
-    await navigator.clipboard.writeText(walletAddress);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
   };
 
   const handleSignOut = () => {
@@ -49,15 +53,17 @@ export function WalletProfile({ onClose }: WalletProfileProps) {
 
         <div className="mt-4 rounded-2xl border border-[#1F1B3A]/5 bg-[#F6F3EC] p-3">
           <p className="text-[11px] uppercase tracking-[0.12em] text-[#6C6885]">Wallet</p>
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <p className="break-all text-sm font-semibold text-[#1F1B3A]">{walletAddress ?? "Not connected"}</p>
+          <div className="mt-2 flex items-center gap-3">
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1F1B3A]" title={walletAddress ?? undefined}>{walletAddress ?? "Not connected"}</p>
             <button
               type="button"
               onClick={handleCopy}
-              className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#1F1B3A] shadow-sm"
+              disabled={!walletAddress}
+              className="relative inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-[#1F1B3A]/10 bg-white px-2.5 text-xs font-bold text-[#5A4BDB] shadow-sm transition hover:border-[#5A4BDB]/30 hover:bg-[#F0ECFF] disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Copy wallet address"
             >
-              {copied ? <Check className="h-4 w-4 text-[#3BB273]" /> : <Copy className="h-4 w-4" />}
+              {copied ? <Check className="h-3.5 w-3.5 text-[#3BB273]" /> : <Copy className="h-3.5 w-3.5" />}
+              <span>{copied ? "Copied" : "Copy"}</span>
               {copied ? (
                 <span className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-full bg-[#1F1B3A] px-2 py-1 text-[10px] font-medium text-white">
                   Copied!

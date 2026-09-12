@@ -1,17 +1,18 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Inter+Tight:wght@500;600;700;800&display=swap");
 @import "tailwindcss";
 
 :root {
-  --background: #F6F3EC;
-  --surface: #FFFFFF;
-  --primary: #5A4BDB;
-  --text: #1F1B3A;
-  --secondary: #6C6885;
-  --success: #3BB273;
-  --warning: #F0B54A;
-  --error: #E35D6A;
+  --background: #f6f3ec;
+  --surface: #ffffff;
+  --primary: #5a4bdb;
+  --primary-dark: #493bc5;
+  --text: #1f1b3a;
+  --secondary: #6c6885;
+  --muted: #9a96aa;
+  --success: #3bb273;
+  --warning: #f0b54a;
+  --error: #d9345f;
   --radius: 16px;
-  --spacing: 8px;
+  --shadow-soft: 0 14px 35px rgba(31, 27, 58, 0.06);
 }
 
 @theme {
@@ -24,19 +25,23 @@
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-foreground: var(--text);
   --font-sans: var(--font-inter);
-  --font-heading: var(--font-inter-tight);
+  --font-heading: var(--font-inter);
   --font-mono: var(--font-inter);
 }
 
 html {
+  min-width: 320px;
   background: var(--background);
   color: var(--text);
   font-family: var(--font-inter), sans-serif;
+  scroll-behavior: smooth;
 }
 
 body {
+  min-width: 320px;
+  margin: 0;
   background: var(--background);
   color: var(--text);
   font-family: var(--font-inter), sans-serif;
@@ -48,5 +53,48 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-inter-tight), sans-serif;
+  font-family: var(--font-inter), sans-serif;
+  letter-spacing: 0 !important;
+}
+
+/* Keep the legacy tracking utilities from making headings feel pinched. */
+[class*="tracking-[-"] {
+  letter-spacing: 0 !important;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 42%, transparent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--primary-dark);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

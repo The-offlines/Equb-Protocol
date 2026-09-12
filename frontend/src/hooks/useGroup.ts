@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Address } from "viem";
+import { getAddress, isAddress, type Address } from "viem";
 
-import { getGroupContract, type GroupContractData } from "@/src/lib/contract";
+import { EqubGroup, getGroupContract, type GroupContractData } from "@/src/lib/contract";
+import { readContractBatch } from "@/src/lib/arc";
 
 export function useGroup(address?: Address | string) {
   const [data, setData] = useState<GroupContractData | null>(null);
@@ -22,7 +23,14 @@ export function useGroup(address?: Address | string) {
       setIsLoading(true);
       setError(null);
 
-      const contract = getGroupContract(address as Address);
+      if (!isAddress(address)) {
+        setData(null);
+        setError("The group address is not valid.");
+        return;
+      }
+
+      const groupAddress = getAddress(address) as Address;
+      const contract = getGroupContract(groupAddress);
 
       if (!contract) {
         setData(null);
@@ -31,20 +39,44 @@ export function useGroup(address?: Address | string) {
         return;
       }
 
-      const [groupName, dagna, contributionAmount, maxMembers, memberCount, currentRound, status, interval, isPrivate, emergencyMode, members] =
-        await Promise.all([
-          contract.read.groupName(),
-          contract.read.dagna(),
-          contract.read.contributionAmount(),
-          contract.read.maxMembers(),
-          contract.read.memberCount(),
-          contract.read.currentRound(),
-          contract.read.status(),
-          contract.read.interval(),
-          contract.read.isPrivate(),
-          contract.read.emergencyMode(),
-          contract.read.getMembers(),
+      const [groupName, dagna, contributionAmount, maxMembers, memberCount, currentRound, status, interval, isPrivate, emergencyMode, members, currentPool] =
+        await readContractBatch([
+          { address: groupAddress, abi: EqubGroup, functionName: "groupName" },
+          { address: groupAddress, abi: EqubGroup, functionName: "dagna" },
+          { address: groupAddress, abi: EqubGroup, functionName: "contributionAmount" },
+          { address: groupAddress, abi: EqubGroup, functionName: "maxMembers" },
+          { address: groupAddress, abi: EqubGroup, functionName: "memberCount" },
+          { address: groupAddress, abi: EqubGroup, functionName: "currentRound" },
+          { address: groupAddress, abi: EqubGroup, functionName: "status" },
+          { address: groupAddress, abi: EqubGroup, functionName: "interval" },
+          { address: groupAddress, abi: EqubGroup, functionName: "isPrivate" },
+          { address: groupAddress, abi: EqubGroup, functionName: "emergencyMode" },
+          { address: groupAddress, abi: EqubGroup, functionName: "getMembers" },
+          { address: groupAddress, abi: EqubGroup, functionName: "getCurrentPool" },
         ]);
+
+      const memberAddresses = (members as Address[]) ?? [];
+      const memberInfos = memberAddresses.length === 0
+        ? []
+        : await readContractBatch(
+            memberAddresses.map((memberAddress) => ({
+              address: groupAddress,
+              abi: EqubGroup,
+              functionName: "memberInfo",
+              args: [memberAddress],
+            })),
+          );
+      const memberDetails = memberAddresses.map((memberAddress, index) => {
+        const info = memberInfos[index] as readonly [boolean, boolean, boolean, number, bigint];
+        return {
+          address: memberAddress,
+          joined: info[0],
+          receivedPayout: info[1],
+          paidCurrentRound: info[2],
+          joinedRound: Number(info[3]),
+          joinedAt: info[4],
+        };
+      });
 
       setData({
         groupName: String(groupName),
@@ -57,10 +89,12 @@ export function useGroup(address?: Address | string) {
         interval: Number(interval),
         isPrivate: Boolean(isPrivate),
         emergencyMode: Boolean(emergencyMode),
-        members: (members as Address[]) ?? [],
+        members: memberAddresses,
+        memberDetails,
+        currentPool: currentPool as bigint,
       });
     } catch (caughtError) {
-      console.error("useGroup error:", caughtError);
+      console.warn("useGroup read failed; Arc RPC will be retried on the next refresh.");
       setData(null);
       setError(caughtError instanceof Error ? caughtError.message : "Failed to load group details.");
     } finally {

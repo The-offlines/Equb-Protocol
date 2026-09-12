@@ -1,17 +1,36 @@
 import { NextResponse } from "next/server";
 import { initiateUserControlledWalletsClient } from "@circle-fin/user-controlled-wallets";
 
+type CircleWallet = {
+  blockchain?: string;
+  address?: string;
+  state?: string;
+};
+
+type CircleClient = ReturnType<typeof initiateUserControlledWalletsClient>;
+
+async function findArcWallet(client: CircleClient, userToken: string) {
+  const walletsResponse = await client.listWallets({ userToken });
+  const wallets: CircleWallet[] = walletsResponse.data?.wallets ?? [];
+  const arcWallet = wallets.find(
+    (wallet) => wallet.address && wallet.blockchain?.toUpperCase().replace("_", "-") === "ARC-TESTNET",
+  );
+
+  return { walletAddress: arcWallet?.address ?? null, wallets };
+}
+
 export async function POST(request: Request) {
   try {
-    const { email, deviceId, userId } = (await request.json()) as { 
-      email?: string; 
-      deviceId?: string; 
-      userId?: string 
+    const { email, deviceId, userId, userToken, encryptionKey, challengeId } = (await request.json()) as {
+      email?: string;
+      deviceId?: string;
+      userId?: string;
+      userToken?: string;
+      encryptionKey?: string;
+      challengeId?: string;
     };
 
-    if (!email?.trim() || !deviceId) {
-      return NextResponse.json({ error: "Email and device ID are required." }, { status: 400 });
-    }
+    const isVerificationRequest = Boolean(userToken || encryptionKey || challengeId);
 
     const apiKey = process.env.CIRCLE_API_KEY;
     if (!apiKey) {
@@ -19,6 +38,48 @@ export async function POST(request: Request) {
     }
 
     const client = initiateUserControlledWalletsClient({ apiKey });
+
+    if (isVerificationRequest) {
+      if (!userId || !userToken || !encryptionKey) {
+        return NextResponse.json({ error: "Verification details are required." }, { status: 400 });
+      }
+
+      const verifiedUserToken = userToken;
+      // Circle can take a few seconds to index the wallet after the PIN iframe
+      // closes, so do not turn that normal delay into a permanent 502.
+      const walletSearch = await findArcWallet(client, verifiedUserToken);
+      console.log("Circle wallets:", JSON.stringify(walletSearch.wallets, null, 2));
+
+      if (walletSearch.walletAddress) {
+        return NextResponse.json({ walletAddress: walletSearch.walletAddress });
+      }
+
+      if (challengeId) {
+        return NextResponse.json({ walletAddress: null, pending: true }, { status: 202 });
+      }
+
+      const walletChallenge = walletSearch.wallets.length > 0
+        ? await client.createWallet({
+            userToken: verifiedUserToken,
+            blockchains: ["ARC-TESTNET"],
+            idempotencyKey: crypto.randomUUID(),
+          })
+        : await client.createUserPinWithWallets({
+            userToken: verifiedUserToken,
+            blockchains: ["ARC-TESTNET"],
+            idempotencyKey: crypto.randomUUID(),
+          });
+      const newChallengeId = walletChallenge.data?.challengeId;
+      if (!newChallengeId) {
+        return NextResponse.json({ error: "Circle did not return a setup challenge." }, { status: 502 });
+      }
+      return NextResponse.json({ walletAddress: null, challengeId: newChallengeId });
+    }
+
+    if (!email?.trim() || !deviceId) {
+      return NextResponse.json({ error: "Email and device ID are required." }, { status: 400 });
+    }
+
     const normalizedEmail = email.trim().toLowerCase();
     const userIdForCreation = userId || `equb-${normalizedEmail}`;
 

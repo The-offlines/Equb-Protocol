@@ -16,13 +16,14 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { MemberTable } from "@/components/shared/MemberTable";
 import { RoundHistory } from "@/components/shared/RoundHistory";
 import { TreasuryCard } from "@/components/shared/TreasuryCard";
-import { useWallet } from "@/hooks/useWallet";
+import { useCircleContext } from "@/src/providers/CircleProvider";
 import { useGroup } from "@/src/hooks/useGroup";
 import { useContribute } from "@/src/hooks/useContribute";
 import { useTreasury } from "@/src/hooks/useTreasury";
 import { formatUsdcAmount } from "@/src/lib/format";
 import { publicClient } from "@/src/lib/arc";
 import { EqubGroup } from "@/src/lib/contract";
+import { useInviteMember } from "@/src/hooks/useInviteMember";
 import type { GroupDetail, GroupMember, Winner } from "@/types";
 
 const shortenAddress = (value?: string) => {
@@ -40,7 +41,8 @@ export default function GroupDetailPage() {
   const treasury = useTreasury(params?.address ?? "");
   const { currentRound, currentPool, status, refetch: refetchTreasury } = treasury;
   const { contribute, isLoading: isContributing, isSuccess: contributionSuccess, error: contributionError, txHash } = useContribute(params?.address ?? "");
-  const { walletAddress } = useWallet();
+  const { inviteMember, isLoading: isInviting, error: inviteError } = useInviteMember(params?.address ?? "");
+  const { walletAddress } = useCircleContext();
   const [canContribute, setCanContribute] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const lastContributionError = useRef<string | null>(null);
@@ -83,6 +85,15 @@ export default function GroupDetailPage() {
   }, [contributionSuccess, refetchGroup, refetchTreasury]);
 
   useEffect(() => {
+    const handleDataUpdated = () => {
+      void refetchGroup();
+      void refetchTreasury();
+    };
+    window.addEventListener("equb-data-updated", handleDataUpdated);
+    return () => window.removeEventListener("equb-data-updated", handleDataUpdated);
+  }, [refetchGroup, refetchTreasury]);
+
+  useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       if (window.sessionStorage.getItem("equb_join_success") === params?.address) {
         window.sessionStorage.removeItem("equb_join_success");
@@ -117,7 +128,10 @@ export default function GroupDetailPage() {
           functionName: "roundWinner",
           args: [previousRound],
         });
-        if (isActive) setCelebration({ winner: String(winner), round: previousRound, amount: currentPool });
+        if (isActive) {
+          const completedPool = formatUsdcAmount(data?.contributionAmount) * Number(data?.memberCount ?? 0);
+          setCelebration({ winner: String(winner), round: previousRound, amount: completedPool });
+        }
       } catch (caughtError) {
         console.error("Failed to load completed round winner:", caughtError);
       }
@@ -125,7 +139,7 @@ export default function GroupDetailPage() {
 
     void loadWinner();
     return () => { isActive = false; };
-  }, [currentPool, currentRound, params?.address]);
+  }, [currentPool, currentRound, data, params?.address]);
 
   const group = useMemo<GroupDetail | null>(() => {
     if (!data) {
@@ -134,19 +148,27 @@ export default function GroupDetailPage() {
 
     const contributionAmount = formatUsdcAmount(data.contributionAmount);
     const dagnaName = shortenAddress(data.dagna);
-    const normalizedMembers: GroupMember[] = (data.members && data.members.length > 0 ? data.members : [data.dagna]).map((memberAddress, index) => ({
-      id: `${memberAddress}-${index}`,
-      name: memberAddress === data.dagna ? dagnaName : `Member ${index + 1}`,
-      wallet: memberAddress,
-      avatar: memberAddress === data.dagna ? dagnaName.slice(0, 2).toUpperCase() : `M${index + 1}`,
-      hasPaid: memberAddress === data.dagna || index % 2 === 0,
-      hasReceived: index % 3 === 0,
-      joinedAt: new Date(Date.UTC(2024, 0, 15 + index)).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-    }));
+    const normalizedMembers: GroupMember[] = (data.members && data.members.length > 0 ? data.members : [data.dagna]).map((memberAddress, index) => {
+      const details = data.memberDetails[index];
+      const joinedDate = details?.joinedAt
+        ? new Date(Number(details.joinedAt) * 1000).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })
+        : "Unknown";
+
+      return {
+        id: `${memberAddress}-${index}`,
+        name: memberAddress === data.dagna ? dagnaName : `Member ${index + 1}`,
+        wallet: memberAddress,
+        avatar: memberAddress === data.dagna ? dagnaName.slice(0, 2).toUpperCase() : `M${index + 1}`,
+        hasPaid: Boolean(details?.paidCurrentRound),
+        hasReceived: Boolean(details?.receivedPayout),
+        isCurrentWinner: false,
+        joinedAt: joinedDate,
+      };
+    });
 
     const winners: Winner[] = [];
 
@@ -156,11 +178,15 @@ export default function GroupDetailPage() {
       dagnaName,
       dagnaAvatar: dagnaName.slice(0, 2).toUpperCase() || "DG",
       currentRound: Number(data.currentRound ?? 1),
-      totalRounds: Math.max(Number(data.currentRound ?? 1), 1),
+      totalRounds: Number(data.maxMembers ?? 1),
+      status: data.status === 0 ? "forming" : data.status === 1 ? "active" : data.status === 2 ? "completed" : "cancelled",
+      memberCount: Number(data.memberCount ?? 0),
+      paidCount: Number(data.memberDetails.filter((member) => member.paidCurrentRound).length),
+      isPrivate: data.isPrivate,
       contributionAmount,
       interval: data.interval === 1 ? "monthly" : "weekly",
       maxMembers: Number(data.maxMembers ?? 1),
-      poolValue: contributionAmount * Math.max(Number(data.memberCount ?? 1), 1),
+      poolValue: formatUsdcAmount(data.currentPool),
       members: normalizedMembers,
       winners,
     };
@@ -209,7 +235,13 @@ export default function GroupDetailPage() {
   if (error || treasury.error || !group) {
     return (
       <AppShell>
-        <ErrorState message={error ?? treasury.error ?? "No group details were returned from Arc Testnet."} />
+        <ErrorState
+          message={error ?? treasury.error ?? "No group details were returned from Arc Testnet."}
+          onRetry={() => {
+            void refetchGroup();
+            void refetchTreasury();
+          }}
+        />
       </AppShell>
     );
   }
@@ -224,6 +256,9 @@ export default function GroupDetailPage() {
           canContribute={canContribute}
           isContributing={isContributing}
           onContribute={() => setIsModalOpen(true)}
+          onInviteMember={inviteMember}
+          isInviting={isInviting}
+          inviteError={inviteError}
         />
 
         <motion.section

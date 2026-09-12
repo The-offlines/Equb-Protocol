@@ -9,7 +9,7 @@ export interface Group {
   members: number;
   maxMembers: number;
   poolValue: number;
-  nextPayoutDate: string;
+  nextPayoutDate?: string | null;
   status: "forming" | "active" | "completed";
   contributionAmount: number;
   interval: "weekly" | "monthly";
@@ -42,6 +42,10 @@ export interface GroupDetail {
   dagnaAvatar: string;
   currentRound: number;
   totalRounds: number;
+  status: "forming" | "active" | "completed" | "cancelled";
+  memberCount: number;
+  paidCount: number;
+  isPrivate: boolean;
   contributionAmount: number;
   interval: "weekly" | "monthly";
   maxMembers: number;

@@ -1,6 +1,14 @@
 import { formatUnits } from "viem";
 
-export const USDC_DECIMALS = 6;
+// Arc Testnet exposes native USDC with 18 decimal places.
+export const USDC_DECIMALS = 18;
+
+export function formatUsdcDisplay(value: number, maximumFractionDigits = 2): string {
+  return `${value.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits,
+  })} USDC`;
+}
 
 export function formatUsdcAmount(value: bigint | number | string | null | undefined): number {
   if (value === null || value === undefined || value === "") {

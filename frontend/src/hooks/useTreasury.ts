@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Abi, Address } from "viem";
 
-import { publicClient } from "@/src/lib/arc";
+import { readContractBatch } from "@/src/lib/arc";
 import { EqubGroup } from "@/src/lib/contract";
+import { formatUsdcAmount } from "@/src/lib/format";
 
 type TreasuryData = {
   contributionAmount: number;
@@ -45,24 +46,24 @@ export function useTreasury(groupAddress: string) {
       setIsLoading(true);
       setError(null);
       const address = groupAddress as Address;
-      const [contributionAmount, memberCount, paidCount, currentRound, status, currentPool] = await Promise.all([
-        publicClient.readContract({ address, abi: EqubGroup as Abi, functionName: "contributionAmount" }),
-        publicClient.readContract({ address, abi: EqubGroup as Abi, functionName: "memberCount" }),
-        publicClient.readContract({ address, abi: EqubGroup as Abi, functionName: "paidCount" }),
-        publicClient.readContract({ address, abi: EqubGroup as Abi, functionName: "currentRound" }),
-        publicClient.readContract({ address, abi: EqubGroup as Abi, functionName: "status" }),
-        publicClient.readContract({ address, abi: EqubGroup as Abi, functionName: "getCurrentPool" }),
+      const [contributionAmount, memberCount, paidCount, currentRound, status, currentPool] = await readContractBatch([
+        { address, abi: EqubGroup as Abi, functionName: "contributionAmount" },
+        { address, abi: EqubGroup as Abi, functionName: "memberCount" },
+        { address, abi: EqubGroup as Abi, functionName: "paidCount" },
+        { address, abi: EqubGroup as Abi, functionName: "currentRound" },
+        { address, abi: EqubGroup as Abi, functionName: "status" },
+        { address, abi: EqubGroup as Abi, functionName: "getCurrentPool" },
       ]);
 
       const totalMembers = Number(memberCount);
       const paidMembers = Number(paidCount);
       setData({
-        contributionAmount: Number(contributionAmount) / 1e18,
+        contributionAmount: formatUsdcAmount(contributionAmount as bigint),
         memberCount: totalMembers,
         paidCount: paidMembers,
         currentRound: Number(currentRound),
         status: Number(status),
-        currentPool: Number(currentPool) / 1e18,
+        currentPool: formatUsdcAmount(currentPool as bigint),
         remainingMembers: totalMembers - paidMembers,
         progressPercent: totalMembers > 0 ? (paidMembers / totalMembers) * 100 : 0,
       });

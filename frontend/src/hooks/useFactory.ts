@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { FACTORY_ADDRESS, getFactoryContract, type FactoryGroupInfo } from "@/src/lib/contract";
+import { readContractBatch } from "@/src/lib/arc";
+import { EqubFactory, FACTORY_ADDRESS, type FactoryGroupInfo } from "@/src/lib/contract";
 
 let cachedData: { groups: FactoryGroupInfo[]; totalGroups: bigint } | null = null;
 let cacheTime = 0;
@@ -18,23 +19,21 @@ export function useFactory() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refetch = useCallback(async () => {
+  const refetch = useCallback(async (force = false) => {
     try {
       setIsLoading(true);
       setError(null);
 
-      if (cachedData && Date.now() - cacheTime < 30000) {
+      if (!force && cachedData && Date.now() - cacheTime < 30000) {
         setGroups(cachedData.groups);
         setTotalGroups(cachedData.totalGroups);
         setIsLoading(false);
         return;
       }
 
-      const contract = getFactoryContract(FACTORY_ADDRESS);
-
-      const factoryData = await Promise.all([
-        contract.read.getAllGroups(),
-        contract.read.totalGroups(),
+      const factoryData = await readContractBatch([
+        { address: FACTORY_ADDRESS, abi: EqubFactory, functionName: "getAllGroups" },
+        { address: FACTORY_ADDRESS, abi: EqubFactory, functionName: "totalGroups" },
       ]);
 
       const [allGroups, groupCount] = factoryData as [FactoryGroupInfo[], bigint];
@@ -48,7 +47,7 @@ export function useFactory() {
       setGroups(cachedData.groups);
       setTotalGroups(cachedData.totalGroups);
     } catch (caughtError) {
-      console.error("useFactory error:", caughtError);
+      console.warn("useFactory read failed; keeping the last known chain data.");
       if (cachedData) {
         setGroups(cachedData.groups);
         setTotalGroups(cachedData.totalGroups);
