@@ -1,15 +1,10 @@
 "use client";
 
-<<<<<<< Updated upstream
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
-=======
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
->>>>>>> Stashed changes
 
-import { initCircleSdk, verifyEmailOtp } from "@/src/lib/circle";
+import { initCircleSdk } from "@/src/lib/circle";
 import { publicClient } from "@/src/lib/arc";
 
 const STORAGE_KEY = "equb-circle-session";
@@ -54,12 +49,8 @@ type CircleContextValue = {
   encryptionKey: string | null;
   userId: string | null;
   signInWithEmail: (email: string) => Promise<boolean>;
-<<<<<<< Updated upstream
-  refreshUserToken: () => Promise<{ userToken: string; encryptionKey: string } | null>;
   setExternalWallet: (address: string | null, chainId: number | null) => void;
-=======
-  verifyOtp: (otp: string) => Promise<void>;
->>>>>>> Stashed changes
+  connectExistingWallet: () => Promise<void>;
   resetOtpFlow: () => void;
   signOut: () => void;
 };
@@ -113,11 +104,7 @@ export function CircleProvider({ children }: { children: ReactNode }) {
           setUserId(storedUserId);
           setUserToken(session.userToken ?? null);
           setEncryptionKey(session.encryptionKey ?? null);
-<<<<<<< Updated upstream
-          setUserId(session.userId ?? null);
-=======
           if (storedUserId) window.localStorage.setItem(USER_ID_STORAGE_KEY, storedUserId);
->>>>>>> Stashed changes
         }
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
@@ -271,15 +258,17 @@ export function CircleProvider({ children }: { children: ReactNode }) {
     try {
       const circleSdk = initCircleSdk();
       if (!circleSdk) throw new Error("Circle authentication is only available in the browser.");
-<<<<<<< Updated upstream
-      const deviceId = await circleSdk.getDeviceId();
-      const otpSession = await postJson<OtpSession>("/api/circle/otp", { email, deviceId, userId: session.userId });
+      const deviceId = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY) ?? await circleSdk.getDeviceId();
+      window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, deviceId);
+      const currentUserId = userId ?? email.trim().toLowerCase();
+      const otpSession = await postJson<OtpSession>("/api/circle/otp", { email, deviceId, userId: currentUserId });
+      setUserId(currentUserId);
       setAwaitingOtp(true);
-      await startCircleOtpVerification(otpSession, session.userId);
+      await startCircleOtpVerification(otpSession, currentUserId);
     } catch (caughtError) {
       setAwaitingOtp(false);
       setError(caughtError instanceof Error ? caughtError.message : "Unable to send verification code.");
-=======
+/*
       console.log("Circle sign-in: requesting browser device ID");
       const deviceId = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY) ?? await circleSdk.getDeviceId();
       window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, deviceId);
@@ -346,27 +335,49 @@ export function CircleProvider({ children }: { children: ReactNode }) {
       const message = caughtError instanceof Error ? caughtError.message : String(caughtError);
       console.error("Circle sign-in start failed:", caughtError);
       setError(message || "Unable to send verification code.");
->>>>>>> Stashed changes
+*/
       return false;
     } finally {
       setIsLoading(false);
     }
     return true;
-<<<<<<< Updated upstream
   }, [startCircleOtpVerification]);
 
   const setExternalWallet = useCallback((address: string | null, chainId: number | null) => {
     setExternalWalletAddress(address);
     setExternalWalletChainId(chainId);
   }, []);
-=======
-  }, [router]);
->>>>>>> Stashed changes
 
 
 
-<<<<<<< Updated upstream
-=======
+  const connectExistingWallet = useCallback(async () => {
+    const provider = (window as Window & {
+      ethereum?: { request: (args: { method: string }) => Promise<unknown> };
+    }).ethereum;
+
+    if (!provider) {
+      setError("Rabby or MetaMask was not detected.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const accounts = await provider.request({ method: "eth_requestAccounts" }) as string[];
+      const address = accounts[0];
+      const chainId = await provider.request({ method: "eth_chainId" }) as string;
+      if (!address) throw new Error("No wallet account was selected.");
+
+      setExternalWallet(address, Number.parseInt(chainId, 16));
+      router.push("/dashboard");
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to connect wallet.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [router, setExternalWallet]);
+
+/*
   const verifyOtp = useCallback(async (otp: string) => {
     // For Email OTP, userToken and encryptionKey are provided by the SDK after OTP verification.
 
@@ -429,7 +440,7 @@ export function CircleProvider({ children }: { children: ReactNode }) {
     }
   }, [deviceEncryptionKey, deviceToken, otpToken, router, userId]);
 
->>>>>>> Stashed changes
+*/
   const resetOtpFlow = useCallback(() => {
     emailSignInInFlight.current = false;
     setAwaitingOtp(false);
@@ -462,19 +473,11 @@ export function CircleProvider({ children }: { children: ReactNode }) {
     encryptionKey,
     userId,
     signInWithEmail,
-<<<<<<< Updated upstream
-    refreshUserToken,
     setExternalWallet,
-=======
-    verifyOtp,
->>>>>>> Stashed changes
+    connectExistingWallet,
     resetOtpFlow,
     signOut,
-<<<<<<< Updated upstream
-  }), [activeWalletAddress, awaitingOtp, balance, encryptionKey, error, externalWalletChainId, isLoading, refreshUserToken, resetOtpFlow, setExternalWallet, signInWithEmail, signOut, userId, userToken, walletType]);
-=======
-  }), [awaitingOtp, balance, connectExistingWallet, encryptionKey, error, isLoading, resetOtpFlow, signInWithEmail, signOut, userId, userToken, verifyOtp, walletAddress]);
->>>>>>> Stashed changes
+  }), [activeWalletAddress, awaitingOtp, balance, connectExistingWallet, encryptionKey, error, externalWalletChainId, isLoading, resetOtpFlow, setExternalWallet, signInWithEmail, signOut, userId, userToken, walletType]);
 
   return <CircleContext.Provider value={value}>{children}</CircleContext.Provider>;
 }

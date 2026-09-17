@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { initiateUserControlledWalletsClient } from "@circle-fin/user-controlled-wallets";
 
-<<<<<<< Updated upstream
+/*
 type Wallet = { id?: string; address?: string };
 
 export async function GET(request: Request) {
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
     const walletId = arcWallet?.id ?? wallets[0]?.id;
     if (!walletId) {
       return NextResponse.json({ error: "Wallet ID not found." }, { status: 502 });
-=======
+*/
 export async function POST(request: Request) {
   try {
     const { userToken, encryptionKey } = (await request.json()) as { userToken?: string; encryptionKey?: string };
@@ -92,7 +92,6 @@ export async function POST(request: Request) {
     const wallet = wallets.find((wallet) => wallet.blockchain === "ARC-TESTNET");
     if (!wallet) {
       return NextResponse.json({ error: "No ARC-TESTNET wallet found" }, { status: 404 });
->>>>>>> Stashed changes
     }
 
     return NextResponse.json({ walletId: wallet.id, walletAddress: wallet.address });

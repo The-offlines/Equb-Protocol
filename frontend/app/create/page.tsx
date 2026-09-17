@@ -7,11 +7,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import AppShell from "@/components/layout/AppShell";
 import { AuthModal } from "@/components/shared/AuthModal";
 import { Button } from "@/components/ui/Button";
-<<<<<<< Updated upstream
 import { useCircleContext } from "@/src/providers/CircleProvider";
-=======
-import CircleWalletSetup from "@/components/shared/CircleWalletSetup";
->>>>>>> Stashed changes
 import { useCreateGroup } from "@/src/hooks/useCreateGroup";
 
 const initialValues = {
@@ -29,12 +25,8 @@ const intervalOptions: Array<[value: string, label: string, description: string,
 
 export default function CreatePage() {
   const router = useRouter();
-<<<<<<< Updated upstream
   const { walletAddress } = useCircleContext();
   const { createGroup, isLoading, isSuccess, error, txHash } = useCreateGroup();
-=======
-  const { createGroup, retryCreateGroup, needsInitialization, isLoading, isSuccess, error, txHash } = useCreateGroup();
->>>>>>> Stashed changes
   const [formValues, setFormValues] = useState(initialValues);
   const [currentStep, setCurrentStep] = useState(1);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
@@ -117,14 +109,8 @@ export default function CreatePage() {
 
   return (
     <AppShell>
-<<<<<<< Updated upstream
       <div className="mx-auto max-w-5xl pb-10">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-=======
-      <CircleWalletSetup isOpen={needsInitialization} onComplete={retryCreateGroup} />
-      <div className="mx-auto max-w-3xl pb-10">
-        <div className="mb-8 flex items-center justify-between gap-4">
->>>>>>> Stashed changes
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#5A4BDB]">Create an Equb</p>
             <h1 className="mt-2 text-3xl font-black tracking-[-0.06em] text-[#1F1B3A] md:text-4xl">

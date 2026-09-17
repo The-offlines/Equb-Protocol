@@ -14,8 +14,7 @@ type AuthModalProps = {
 };
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
-<<<<<<< Updated upstream
-  const { signInWithEmail, resetOtpFlow, isLoading, error, awaitingOtp, walletAddress } = useCircleContext();
+  const { signInWithEmail, resetOtpFlow, connectExistingWallet, isLoading, error, awaitingOtp, walletAddress } = useCircleContext();
   const [email, setEmail] = useState("");
   const authStarted = useRef(false);
 
@@ -34,17 +33,11 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setEmail("");
     onClose();
   };
-=======
-  const { signInWithEmail, resetOtpFlow, connectExistingWallet, isLoading, error, awaitingOtp } = useCircleContext();
-  const [email, setEmail] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
->>>>>>> Stashed changes
   const handleMagicLink = async () => {
     if (!email.trim()) {
       return;
     }
 
-<<<<<<< Updated upstream
     authStarted.current = true;
     if (!(await signInWithEmail(email.trim()))) {
       authStarted.current = false;
@@ -53,18 +46,6 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
   // Circle owns the only OTP input. Its iframe is opened by the provider.
   if (typeof document === "undefined" || awaitingOtp) {
-=======
-    const sent = await signInWithEmail(email.trim());
-    if (!sent) setNotice(null);
-  };
-
-  const handleBackToEmail = () => {
-    resetOtpFlow();
-    setNotice(null);
-  };
-
-  if (typeof document === "undefined") {
->>>>>>> Stashed changes
     return null;
   }
 
@@ -115,7 +96,6 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             </div>
 
             <div className="mt-6 space-y-3">
-<<<<<<< Updated upstream
               <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void handleMagicLink(); }}>
                 <label htmlFor="auth-email" className="sr-only">Email address</label>
                 <input
@@ -136,42 +116,22 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   {isLoading ? "Opening verification..." : "Continue with Email"}
                 </button>
               </form>
-=======
-              {!awaitingOtp ? (
-                <div className="space-y-3">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="Enter your email"
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-[#1F1B3A] placeholder:text-[#6C6885] focus:border-[#5A4BDB] focus:outline-none focus:ring-2 focus:ring-[#5A4BDB]/10"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={handleMagicLink}
-                    disabled={isLoading}
-                    className="w-full rounded-2xl bg-[#5A4BDB] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(90,75,219,0.2)] transition-colors hover:bg-[#4d3fd1] disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    <Mail className="mr-2 inline-block h-4 w-4" />
-                    {isLoading ? "Sending code..." : "Continue with Email"}
-                  </button>
-
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-center text-sm text-[#6C6885]">Complete verification in Circle&apos;s secure window.</p>
-                  <button
-                    type="button"
-                    onClick={handleBackToEmail}
-                    className="w-full rounded-2xl border border-[#1F1B3A]/10 bg-white px-4 py-2 text-sm font-medium text-[#1F1B3A] hover:border-[#5A4BDB]/20 hover:text-[#5A4BDB]"
-                  >
-                    Start over
-                  </button>
-                </div>
-              )}
->>>>>>> Stashed changes
             </div>
+
+            <div className="my-5 flex items-center gap-3 text-xs text-[#9A96AA]">
+              <span className="h-px flex-1 bg-[#1F1B3A]/10" />
+              <span>or</span>
+              <span className="h-px flex-1 bg-[#1F1B3A]/10" />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void connectExistingWallet()}
+              disabled={isLoading}
+              className="w-full text-center text-xs font-medium text-[#6C6885] transition-colors hover:text-[#5A4BDB] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Already have a wallet? Connect with Rabby
+            </button>
 
             {error ? (
               <div className="mt-4 rounded-2xl bg-[#FFF0F3] px-3 py-2 text-center text-xs font-medium text-[#B4234D]" role="alert">

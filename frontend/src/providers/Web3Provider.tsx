@@ -2,7 +2,7 @@
 
 import "@rainbow-me/rainbowkit/styles.css";
 
-import { RainbowKitProvider } from "@rainbow-me/rainbowkit/components";
+import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createConfig, WagmiProvider } from "wagmi";
 import { injected } from "wagmi/connectors";

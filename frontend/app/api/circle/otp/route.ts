@@ -21,19 +21,13 @@ async function findArcWallet(client: CircleClient, userToken: string) {
 
 export async function POST(request: Request) {
   try {
-<<<<<<< Updated upstream
-    const { email, deviceId, userId, userToken, encryptionKey, challengeId } = (await request.json()) as {
+    const { email, deviceId, userId: requestedUserId, userToken, encryptionKey, challengeId } = (await request.json()) as {
       email?: string;
       deviceId?: string;
       userId?: string;
       userToken?: string;
       encryptionKey?: string;
       challengeId?: string;
-=======
-    const { email, deviceId } = (await request.json()) as {
-      email?: string;
-      deviceId?: string;
->>>>>>> Stashed changes
     };
 
     const isVerificationRequest = Boolean(userToken || encryptionKey || challengeId);
@@ -46,7 +40,7 @@ export async function POST(request: Request) {
     const client = initiateUserControlledWalletsClient({ apiKey });
 
     if (isVerificationRequest) {
-      if (!userId || !userToken || !encryptionKey) {
+      if (!requestedUserId || !userToken || !encryptionKey) {
         return NextResponse.json({ error: "Verification details are required." }, { status: 400 });
       }
 

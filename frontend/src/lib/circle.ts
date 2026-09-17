@@ -1,6 +1,6 @@
 import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
 
-<<<<<<< Updated upstream
+/*
 // Extend W3SSdk type to include methods that exist in the SDK but aren't in type definitions
 declare module "@circle-fin/w3s-pw-web-sdk" {
   interface W3SSdk {
@@ -27,12 +27,11 @@ export function initCircleSdk() {
   if (typeof window === "undefined") {
     return null;
   }
-=======
+*/
 type CircleChallengeCallback = (error: Error | undefined, result: { status?: string } | undefined) => void | Promise<void>;
 type CircleEmailCallback = (error: Error | undefined, result: { userToken: string; encryptionKey: string } | undefined) => void | Promise<void>;
 
 let sdk: W3SSdk;
->>>>>>> Stashed changes
 
 export function getCircleSdk(): W3SSdk {
   if (!sdk) {
@@ -85,7 +84,7 @@ export async function getCircleWalletId(userToken: string, walletAddress?: strin
 }
 
 export function formatCircleError(error: unknown): string {
-<<<<<<< Updated upstream
+/*
   if (error instanceof Error) {
     const details = error.cause ? `; cause: ${formatCircleError(error.cause)}` : "";
     return `${error.message}${details}`;
@@ -100,9 +99,8 @@ export function formatCircleError(error: unknown): string {
     return "Circle rejected or closed the approval.";
   }
   return typeof error === "string" ? error : "Unknown Circle transaction error.";
-=======
+*/
   return error instanceof Error ? error.message : typeof error === "string" ? error : "Circle transaction failed.";
->>>>>>> Stashed changes
 }
 
 export async function getContractChallengeId({
@@ -128,7 +126,7 @@ export async function getContractChallengeId({
   return data.challengeId;
 }
 
-<<<<<<< Updated upstream
+/*
 export function executeChallenge(
   challengeId: string,
   userToken: string,
@@ -215,14 +213,13 @@ export async function pollTransactionStatus(challengeId: string, userToken: stri
     if (["FAILED", "DENIED", "CANCELLED"].includes(state)) {
       throw new Error(`Circle transaction ${state.toLowerCase()}${transaction?.errorReason ? `: ${transaction.errorReason}` : ""}.`);
     }
-=======
+*/
 export async function pollTransactionStatus(walletId: string, userToken: string): Promise<string> {
   const response = await fetch(`/api/circle/transactions?userToken=${encodeURIComponent(userToken)}&walletId=${encodeURIComponent(walletId)}`);
   const data = (await response.json()) as { transactions?: Array<{ state?: string; txHash?: string }>; error?: string };
   const transaction = data.transactions?.[0];
   if (!response.ok || transaction?.state !== "COMPLETE" || !transaction.txHash) {
     throw new Error(data.error ?? "Circle transaction is not complete.");
->>>>>>> Stashed changes
   }
   return transaction.txHash;
 }

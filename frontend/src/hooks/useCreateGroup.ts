@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useCircleContext } from "@/src/providers/CircleProvider";
 import { clearCache as clearFactoryCache } from "@/src/hooks/useFactory";
-<<<<<<< Updated upstream
+/*
 import { clearCache as clearRegistryCache } from "@/src/hooks/useRegistry";
 import { publicClient } from "@/src/lib/arc";
 import {
@@ -16,11 +16,10 @@ import {
   formatCircleError,
 } from "@/src/lib/circle";
 import { EqubFactory, FACTORY_ADDRESS } from "@/src/lib/contract";
-=======
+*/
 import { executeChallenge } from "@/src/lib/circle";
 
 type GroupRequest = [string, number, number, number, boolean];
->>>>>>> Stashed changes
 
 export function useCreateGroup() {
   const router = useRouter();
@@ -104,7 +103,7 @@ export function useCreateGroup() {
           setIsLoading(false);
           return;
         }
-<<<<<<< Updated upstream
+/*
       } catch {
         setError("Unable to verify your wallet is on Arc Testnet. Please refresh and try again");
         setIsLoading(false);
@@ -194,7 +193,7 @@ export function useCreateGroup() {
           return true;
         } catch {
           return false;
-=======
+*/
         if (result?.status === "COMPLETE") {
           clearFactoryCache();
           setIsSuccess(true);
@@ -203,7 +202,6 @@ export function useCreateGroup() {
         } else if (result?.status === "FAILED") {
           setError("Transaction failed");
           setIsLoading(false);
->>>>>>> Stashed changes
         }
       });
     } catch (caughtError) {
