@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { initiateUserControlledWalletsClient } from "@circle-fin/user-controlled-wallets";
 
+<<<<<<< Updated upstream
 type Wallet = { id?: string; address?: string };
 
 export async function GET(request: Request) {
@@ -46,12 +47,58 @@ export async function GET(request: Request) {
     const walletId = arcWallet?.id ?? wallets[0]?.id;
     if (!walletId) {
       return NextResponse.json({ error: "Wallet ID not found." }, { status: 502 });
+=======
+export async function POST(request: Request) {
+  try {
+    const { userToken, encryptionKey } = (await request.json()) as { userToken?: string; encryptionKey?: string };
+
+    if (!userToken) {
+      return NextResponse.json({ error: "User token is required" }, { status: 400 });
     }
 
-    return NextResponse.json({ walletId, walletAddress: wallet.address });
+    console.log('userToken JWT payload:', JSON.parse(Buffer.from(userToken.split('.')[1], 'base64').toString()));
+
+    const client = initiateUserControlledWalletsClient({
+      apiKey: process.env.CIRCLE_API_KEY!,
+    });
+
+    console.log("Listing wallets for the provided user token...");
+    const walletsResponse = await client.listWallets({ userToken, blockchain: "ARC-TESTNET" });
+    const wallets = walletsResponse.data?.wallets ?? [];
+    console.log("Wallets found:", JSON.stringify(wallets));
+
+    if (wallets.length === 0) {
+      console.log('No wallets found, creating ARC-TESTNET wallet...');
+      try {
+        const createWalletResponse = await (client.createWallet as unknown as (params: Record<string, unknown>) => Promise<{ data?: { challengeId?: string } }>)({
+          userToken,
+          blockchains: ['ARC-TESTNET'],
+          count: 1,
+        });
+        console.log('Create wallet response:', JSON.stringify(createWalletResponse.data));
+        return NextResponse.json({
+          needsWalletInit: true,
+          challengeId: createWalletResponse.data?.challengeId,
+          userToken,
+          encryptionKey,
+        }, { status: 200 });
+      } catch (createError: unknown) {
+        const message = createError instanceof Error ? createError.message : String(createError);
+        console.log('Create wallet error:', message);
+        return NextResponse.json({ error: message }, { status: 500 });
+      }
+    }
+
+    const wallet = wallets.find((wallet) => wallet.blockchain === "ARC-TESTNET");
+    if (!wallet) {
+      return NextResponse.json({ error: "No ARC-TESTNET wallet found" }, { status: 404 });
+>>>>>>> Stashed changes
+    }
+
+    return NextResponse.json({ walletId: wallet.id, walletAddress: wallet.address });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to fetch wallet ID." },
+      { error: error instanceof Error ? error.message : "Unable to fetch wallet ID" },
       { status: 500 },
     );
   }

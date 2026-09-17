@@ -1,17 +1,24 @@
 "use client";
 
+<<<<<<< Updated upstream
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
+=======
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+>>>>>>> Stashed changes
 
-import { initCircleSdk } from "@/src/lib/circle";
+import { initCircleSdk, verifyEmailOtp } from "@/src/lib/circle";
 import { publicClient } from "@/src/lib/arc";
 
 const STORAGE_KEY = "equb-circle-session";
 const USER_ID_STORAGE_KEY = "circle_user_id";
+const DEVICE_ID_STORAGE_KEY = "circle_device_id";
 
 type CircleSession = {
   walletAddress: string;
+  email?: string;
   userToken?: string;
   encryptionKey?: string;
   userId?: string;
@@ -47,8 +54,12 @@ type CircleContextValue = {
   encryptionKey: string | null;
   userId: string | null;
   signInWithEmail: (email: string) => Promise<boolean>;
+<<<<<<< Updated upstream
   refreshUserToken: () => Promise<{ userToken: string; encryptionKey: string } | null>;
   setExternalWallet: (address: string | null, chainId: number | null) => void;
+=======
+  verifyOtp: (otp: string) => Promise<void>;
+>>>>>>> Stashed changes
   resetOtpFlow: () => void;
   signOut: () => void;
 };
@@ -85,24 +96,34 @@ export function CircleProvider({ children }: { children: ReactNode }) {
   const [awaitingOtp, setAwaitingOtp] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const emailSignInInFlight = useRef(false);
 
   const activeWalletAddress = externalWalletAddress ?? walletAddress;
   const walletType = externalWalletAddress ? "external" : walletAddress ? "circle" : null;
 
   useEffect(() => {
     const restoreSession = window.setTimeout(() => {
+      const restore = async () => {
       try {
         const stored = window.localStorage.getItem(STORAGE_KEY);
         if (stored) {
           const session = JSON.parse(stored) as CircleSession;
+          const storedUserId = session.userId ?? window.localStorage.getItem(USER_ID_STORAGE_KEY);
           setWalletAddress(session.walletAddress || null);
+          setUserId(storedUserId);
           setUserToken(session.userToken ?? null);
           setEncryptionKey(session.encryptionKey ?? null);
+<<<<<<< Updated upstream
           setUserId(session.userId ?? null);
+=======
+          if (storedUserId) window.localStorage.setItem(USER_ID_STORAGE_KEY, storedUserId);
+>>>>>>> Stashed changes
         }
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
       }
+      };
+      void restore();
     }, 0);
 
     return () => window.clearTimeout(restoreSession);
@@ -235,6 +256,8 @@ export function CircleProvider({ children }: { children: ReactNode }) {
   }, [completeCircleLogin]);
 
   const signInWithEmail = useCallback(async (email: string) => {
+    if (emailSignInInFlight.current) return false;
+    emailSignInInFlight.current = true;
     setIsLoading(true);
     setError(null);
     setWalletAddress(null);
@@ -246,14 +269,9 @@ export function CircleProvider({ children }: { children: ReactNode }) {
     window.localStorage.removeItem(STORAGE_KEY);
 
     try {
-      const session = await postJson<{ userToken: string; encryptionKey: string; userId: string; walletId?: string | null }>("/api/circle/session", { email });
-      setUserToken(session.userToken);
-      setEncryptionKey(session.encryptionKey);
-      setUserId(session.userId);
-      window.localStorage.setItem(USER_ID_STORAGE_KEY, session.userId);
-      if (session.walletId) window.localStorage.setItem("circle_wallet_id", session.walletId);
       const circleSdk = initCircleSdk();
       if (!circleSdk) throw new Error("Circle authentication is only available in the browser.");
+<<<<<<< Updated upstream
       const deviceId = await circleSdk.getDeviceId();
       const otpSession = await postJson<OtpSession>("/api/circle/otp", { email, deviceId, userId: session.userId });
       setAwaitingOtp(true);
@@ -261,39 +279,159 @@ export function CircleProvider({ children }: { children: ReactNode }) {
     } catch (caughtError) {
       setAwaitingOtp(false);
       setError(caughtError instanceof Error ? caughtError.message : "Unable to send verification code.");
+=======
+      console.log("Circle sign-in: requesting browser device ID");
+      const deviceId = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY) ?? await circleSdk.getDeviceId();
+      window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, deviceId);
+      console.log("Circle sign-in: browser device ID received");
+      const otpSession = await postJson<{
+        userToken: string;
+        encryptionKey: string;
+        deviceToken: string;
+        deviceEncryptionKey: string;
+        otpToken: string;
+      }>("/api/circle/session", { email, deviceId });
+      console.log("Circle sign-in: email token session received");
+      const normalizedEmail = email.trim().toLowerCase();
+      setUserToken(otpSession.userToken);
+      setEncryptionKey(otpSession.encryptionKey);
+      setDeviceToken(otpSession.deviceToken);
+      setDeviceEncryptionKey(otpSession.deviceEncryptionKey);
+      setOtpToken(otpSession.otpToken);
+      setAwaitingOtp(true);
+
+      circleSdk.updateConfigs({
+        appSettings: { appId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID! },
+        authentication: { userToken: otpSession.userToken, encryptionKey: otpSession.encryptionKey },
+        loginConfigs: {
+          deviceToken: otpSession.deviceToken,
+          deviceEncryptionKey: otpSession.deviceEncryptionKey,
+          otpToken: otpSession.otpToken,
+        },
+      } as never);
+      console.log("Circle sign-in: launching OTP card");
+      verifyEmailOtp((authError, authResult) => {
+        if (authError || !authResult) {
+          setError(authError?.message ?? "Unable to verify code.");
+          emailSignInInFlight.current = false;
+          setAwaitingOtp(false);
+          setIsLoading(false);
+          return;
+        }
+        const verifiedToken = authResult.userToken;
+        const verifiedEncryptionKey = authResult.encryptionKey;
+        let verifiedUserId = normalizedEmail;
+        try {
+          const payload = JSON.parse(atob(verifiedToken.split(".")[1])) as { sub?: string; userId?: string };
+          verifiedUserId = payload.sub ?? payload.userId ?? normalizedEmail;
+        } catch {
+          setError("Circle returned an invalid verified token.");
+          emailSignInInFlight.current = false;
+          setAwaitingOtp(false);
+          setIsLoading(false);
+          return;
+        }
+        setUserToken(verifiedToken);
+        setEncryptionKey(verifiedEncryptionKey);
+        setUserId(verifiedUserId);
+        setAwaitingOtp(false);
+        emailSignInInFlight.current = false;
+        window.localStorage.setItem(USER_ID_STORAGE_KEY, verifiedUserId);
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ email: normalizedEmail, walletAddress: "", userToken: verifiedToken, encryptionKey: verifiedEncryptionKey, userId: verifiedUserId }));
+        setIsLoading(false);
+        router.push("/dashboard");
+      });
+    } catch (caughtError) {
+      emailSignInInFlight.current = false;
+      const message = caughtError instanceof Error ? caughtError.message : String(caughtError);
+      console.error("Circle sign-in start failed:", caughtError);
+      setError(message || "Unable to send verification code.");
+>>>>>>> Stashed changes
       return false;
     } finally {
       setIsLoading(false);
     }
     return true;
+<<<<<<< Updated upstream
   }, [startCircleOtpVerification]);
 
   const setExternalWallet = useCallback((address: string | null, chainId: number | null) => {
     setExternalWalletAddress(address);
     setExternalWalletChainId(chainId);
   }, []);
+=======
+  }, [router]);
+>>>>>>> Stashed changes
 
-  const refreshUserToken = useCallback(async () => {
-    if (!userId) {
-      setError("Your Circle session has expired. Please sign in with your email again.");
-      return null;
-    }
+
+
+<<<<<<< Updated upstream
+=======
+  const verifyOtp = useCallback(async (otp: string) => {
+    // For Email OTP, userToken and encryptionKey are provided by the SDK after OTP verification.
+
+    setIsLoading(true);
+    setError(null);
 
     try {
-      const session = await postJson<{ userToken: string; encryptionKey: string; userId: string; walletId?: string | null }>("/api/circle/session", { userId });
-      setUserToken(session.userToken);
-      setEncryptionKey(session.encryptionKey);
-      window.localStorage.setItem(USER_ID_STORAGE_KEY, session.userId);
-      if (session.walletId) window.localStorage.setItem("circle_wallet_id", session.walletId);
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ walletAddress, userToken: session.userToken, encryptionKey: session.encryptionKey, userId: session.userId }));
-      return { userToken: session.userToken, encryptionKey: session.encryptionKey };
+      const circleSdk = initCircleSdk();
+      if (!circleSdk || !deviceToken || !deviceEncryptionKey || !otpToken) throw new Error("Your OTP session has expired. Please request a new code.");
+      await new Promise<void>((resolve, reject) => {
+        circleSdk.updateConfigs({ appSettings: { appId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID! }, loginConfigs: { deviceToken, deviceEncryptionKey, otpToken } }, async (authError, authResult) => {
+          if (authError || !authResult) { reject(new Error(authError?.message ?? "Unable to verify code.")); return; }
+          try {
+            circleSdk.setAuthentication({ userToken: authResult.userToken, encryptionKey: authResult.encryptionKey });
+            const result = await postJson<{ walletAddress: string | null; challengeId?: string | null; walletId?: string | null; userToken?: string; encryptionKey?: string; userId?: string }>("/api/circle/verify", { userId, userToken: authResult.userToken, encryptionKey: authResult.encryptionKey, otp });
+            const exactUserId = result.userId ?? userId ?? "";
+            const exactUserToken = result.userToken ?? authResult.userToken;
+            const exactEncryptionKey = result.encryptionKey ?? authResult.encryptionKey;
+            if (result.challengeId) {
+              await new Promise<void>((challengeResolve, challengeReject) => {
+                circleSdk.execute(result.challengeId!, async (challengeError) => {
+                  if (challengeError) { challengeReject(new Error(challengeError.message ?? "Unable to set up your Circle PIN.")); return; }
+                  try {
+                    const walletResult = await postJson<{ walletAddress: string | null; walletId?: string | null }>("/api/circle/verify", { userId, userToken: authResult.userToken, encryptionKey: authResult.encryptionKey, challengeId: result.challengeId });
+                    if (!walletResult.walletAddress) throw new Error("Circle did not return a wallet address.");
+                    setWalletAddress(walletResult.walletAddress);
+                    setUserToken(exactUserToken);
+                    setEncryptionKey(exactEncryptionKey);
+                    setUserId(exactUserId);
+                    setAwaitingOtp(false);
+                    if (walletResult.walletId) window.localStorage.setItem("circle_wallet_id", walletResult.walletId);
+                    window.localStorage.setItem(USER_ID_STORAGE_KEY, exactUserId);
+                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ walletAddress: walletResult.walletAddress, userToken: exactUserToken, encryptionKey: exactEncryptionKey, userId: exactUserId }));
+                    router.push("/dashboard");
+                    challengeResolve();
+                  } catch (error) { challengeReject(error); }
+                });
+              });
+              return;
+            }
+            if (!result.walletAddress) throw new Error("Circle did not return a wallet address.");
+            setWalletAddress(result.walletAddress);
+            setUserToken(exactUserToken);
+            setEncryptionKey(exactEncryptionKey);
+            setUserId(exactUserId);
+            setAwaitingOtp(false);
+            if (result.walletId) window.localStorage.setItem("circle_wallet_id", result.walletId);
+            window.localStorage.setItem(USER_ID_STORAGE_KEY, exactUserId);
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ walletAddress: result.walletAddress, userToken: exactUserToken, encryptionKey: exactEncryptionKey, userId: exactUserId }));
+            router.push("/dashboard");
+            resolve();
+          } catch (error) { reject(error); }
+        });
+        circleSdk.verifyOtp();
+      });
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to refresh Circle session.");
-      return null;
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to verify code.");
+    } finally {
+      setIsLoading(false);
     }
-  }, [userId, walletAddress]);
+  }, [deviceEncryptionKey, deviceToken, otpToken, router, userId]);
 
+>>>>>>> Stashed changes
   const resetOtpFlow = useCallback(() => {
+    emailSignInInFlight.current = false;
     setAwaitingOtp(false);
     setError(null);
   }, []);
@@ -324,11 +462,19 @@ export function CircleProvider({ children }: { children: ReactNode }) {
     encryptionKey,
     userId,
     signInWithEmail,
+<<<<<<< Updated upstream
     refreshUserToken,
     setExternalWallet,
+=======
+    verifyOtp,
+>>>>>>> Stashed changes
     resetOtpFlow,
     signOut,
+<<<<<<< Updated upstream
   }), [activeWalletAddress, awaitingOtp, balance, encryptionKey, error, externalWalletChainId, isLoading, refreshUserToken, resetOtpFlow, setExternalWallet, signInWithEmail, signOut, userId, userToken, walletType]);
+=======
+  }), [awaitingOtp, balance, connectExistingWallet, encryptionKey, error, isLoading, resetOtpFlow, signInWithEmail, signOut, userId, userToken, verifyOtp, walletAddress]);
+>>>>>>> Stashed changes
 
   return <CircleContext.Provider value={value}>{children}</CircleContext.Provider>;
 }

@@ -3,22 +3,21 @@ import { initiateUserControlledWalletsClient } from "@circle-fin/user-controlled
 
 export async function POST(request: Request) {
   try {
-    const {
-      userToken,
-      walletId,
-      contractAddress,
-      abiFunctionSignature,
-      abiParameters,
-    } = (await request.json()) as {
+    const { userToken, walletId, name, contributionAmount, maxMembers, interval, isPrivate, contractAddress, abiFunctionSignature, abiParameters } = (await request.json()) as {
       userToken?: string;
       walletId?: string;
+      name?: string;
+      contributionAmount?: string;
+      maxMembers?: number;
+      interval?: number;
+      isPrivate?: boolean;
       contractAddress?: string;
       abiFunctionSignature?: string;
-      abiParameters?: unknown[];
+      abiParameters?: string[];
     };
 
-    if (!userToken || !walletId || !contractAddress || !abiFunctionSignature || !Array.isArray(abiParameters)) {
-      return NextResponse.json({ error: "Contract execution details are required." }, { status: 400 });
+    if (!userToken || !walletId || (!name && !abiFunctionSignature) || (!abiParameters && (!contributionAmount || maxMembers === undefined || interval === undefined || isPrivate === undefined))) {
+      return NextResponse.json({ error: "Group details are required." }, { status: 400 });
     }
 
     const apiKey = process.env.CIRCLE_API_KEY;
@@ -26,6 +25,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Circle API key is not configured." }, { status: 500 });
     }
 
+<<<<<<< Updated upstream
     const circleResponse = await fetch(
       "https://api.circle.com/v1/w3s/user/transactions/contractExecution",
       {
@@ -65,6 +65,22 @@ export async function POST(request: Request) {
     }
 
     const challengeId = circleData.data?.challengeId;
+=======
+    const client = initiateUserControlledWalletsClient({ apiKey });
+    const executionClient = client as unknown as Record<string, (params: Record<string, unknown>) => Promise<{ data?: { challengeId?: string } }>>;
+    const contributionAmountInWei = name ? BigInt(contributionAmount!).toString() : undefined;
+    const response = await executionClient[name ? "createContractExecutionTransaction" : "createUserTransactionContractExecutionChallenge"]({
+      userToken,
+      walletId,
+      contractAddress: name ? "0xe8eb461A424a4702473aCC35ad9ADA2bbb8BFAdA" : contractAddress!,
+      abiFunctionSignature: name ? "createGroup(string,uint256,uint32,uint8,bool)" : abiFunctionSignature,
+      abiParameters: name ? [name, contributionAmountInWei!, maxMembers!.toString(), interval!.toString(), isPrivate ? "true" : "false"] : abiParameters,
+      fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+      idempotencyKey: crypto.randomUUID(),
+    });
+
+    const challengeId = response.data?.challengeId;
+>>>>>>> Stashed changes
     if (!challengeId) {
       return NextResponse.json({ error: "Circle did not return a challenge ID." }, { status: 502 });
     }

@@ -1,11 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
-import { decodeEventLog, parseUnits } from "viem";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useCircleContext } from "@/src/providers/CircleProvider";
 import { clearCache as clearFactoryCache } from "@/src/hooks/useFactory";
+<<<<<<< Updated upstream
 import { clearCache as clearRegistryCache } from "@/src/hooks/useRegistry";
 import { publicClient } from "@/src/lib/arc";
 import {
@@ -16,14 +16,22 @@ import {
   formatCircleError,
 } from "@/src/lib/circle";
 import { EqubFactory, FACTORY_ADDRESS } from "@/src/lib/contract";
+=======
+import { executeChallenge } from "@/src/lib/circle";
+
+type GroupRequest = [string, number, number, number, boolean];
+>>>>>>> Stashed changes
 
 export function useCreateGroup() {
   const router = useRouter();
-  const { walletAddress, userToken, encryptionKey, userId, refreshUserToken } = useCircleContext();
+  const { userToken, encryptionKey } = useCircleContext();
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
+  const [txHash] = useState<string | null>(null);
+  const [needsInitialization, setNeedsInitialization] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<GroupRequest | null>(null);
+  const createGroupRef = useRef<((...request: GroupRequest) => Promise<void>) | null>(null);
 
   const createGroup = useCallback(async (
     name: string,
@@ -32,42 +40,71 @@ export function useCreateGroup() {
     interval: number,
     isPrivate: boolean,
   ) => {
-    console.log("STEP 1: Create Equb button clicked", { name, contributionAmount, maxMembers, interval, isPrivate });
     setIsLoading(true);
     setIsSuccess(false);
     setError(null);
-    setTxHash(null);
+    setNeedsInitialization(false);
 
-    // Guard: Verify wallet is connected and Circle session is valid
-    if (!walletAddress) {
-      setError("Please sign in with your email first to connect your Circle wallet");
-      setIsLoading(false);
-      return;
-    }
+    try {
+      if (!userToken || !encryptionKey) throw new Error("Your Circle session has expired. Please sign in again.");
 
-    if (!userToken || !encryptionKey) {
-      setError("Your Circle session has expired. Please sign in with your email again");
-      setIsLoading(false);
-      return;
-    }
+      const walletResponse = await fetch("/api/circle/wallet-id", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userToken, encryptionKey }),
+      });
+      const walletData = (await walletResponse.json()) as {
+        walletId?: string;
+        needsWalletInit?: boolean;
+        challengeId?: string;
+        userToken?: string;
+        encryptionKey?: string;
+        error?: string;
+      };
+      if (walletData.needsWalletInit && walletData.challengeId) {
+        executeChallenge(userToken, encryptionKey, walletData.challengeId, (challengeError, result) => {
+          if (challengeError) {
+            setError(challengeError.message);
+            setIsLoading(false);
+          } else if (result?.status === "COMPLETE") {
+            void createGroupRef.current?.(name, contributionAmount, maxMembers, interval, isPrivate);
+          } else {
+            setError("Wallet initialization failed.");
+            setIsLoading(false);
+          }
+        });
+        return;
+      }
+      if (!walletResponse.ok || !walletData.walletId) {
+        throw new Error(walletData.error ?? "Unable to fetch Circle wallet.");
+      }
 
-    if (!userId) {
-      setError("Your Circle user ID is missing. Please sign in with your email again");
-      setIsLoading(false);
-      return;
-    }
+      const contributionAmountWei = BigInt(contributionAmount) * BigInt(10 ** 18);
+      const challengeResponse = await fetch("/api/circle/execute-contract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userToken,
+          walletId: walletData.walletId,
+          name,
+          contributionAmount: contributionAmountWei.toString(),
+          maxMembers,
+          interval,
+          isPrivate,
+        }),
+      });
+      const challengeData = (await challengeResponse.json()) as { challengeId?: string; error?: string };
+      if (!challengeResponse.ok || !challengeData.challengeId) {
+        throw new Error(challengeData.error ?? "Unable to create Circle contract challenge.");
+      }
 
-    // Guard: Verify user is on Arc Testnet and has ARC balance
-    if (typeof window !== "undefined") {
-      try {
-        const balanceResponse = await fetch(`/api/arc/balance?address=${encodeURIComponent(walletAddress)}`);
-        const balanceData = (await balanceResponse.json()) as { balance?: string; error?: string };
-        if (!balanceResponse.ok) throw new Error(balanceData.error ?? "Unable to verify Arc balance.");
-        if (balanceData.balance === "0x0") {
-          setError("Your Circle wallet has no ARC on Arc Testnet. Request Arc testnet funds first");
+      executeChallenge(userToken, encryptionKey, challengeData.challengeId, (challengeError, result) => {
+        if (challengeError) {
+          setError(challengeError.message);
           setIsLoading(false);
           return;
         }
+<<<<<<< Updated upstream
       } catch {
         setError("Unable to verify your wallet is on Arc Testnet. Please refresh and try again");
         setIsLoading(false);
@@ -157,56 +194,34 @@ export function useCreateGroup() {
           return true;
         } catch {
           return false;
+=======
+        if (result?.status === "COMPLETE") {
+          clearFactoryCache();
+          setIsSuccess(true);
+          setIsLoading(false);
+          router.push("/my-equbs");
+        } else if (result?.status === "FAILED") {
+          setError("Transaction failed");
+          setIsLoading(false);
+>>>>>>> Stashed changes
         }
       });
-      if (!groupCreatedLog) throw new Error(`No factory event found; receipt status: ${receipt.status}; transaction hash: ${hash}`);
-      let decodedGroup: string | undefined;
-      try {
-        const decoded = decodeEventLog({ abi: EqubFactory, eventName: "GroupCreated", data: groupCreatedLog.data, topics: groupCreatedLog.topics });
-        decodedGroup = (decoded.args as { group?: string }).group;
-        console.log("STEP 8: GroupCreated decoded", decoded);
-      } catch (decodeError) {
-        throw new Error(`Unable to decode GroupCreated event; receipt status: ${receipt.status}; transaction hash: ${hash}; cause: ${formatCircleError(decodeError)}`);
-      }
-      if (!decodedGroup || !/^0x[0-9a-fA-F]{40}$/.test(decodedGroup)) {
-        throw new Error(`GroupCreated event did not contain a valid group address; transaction hash: ${hash}`);
-      }
-      console.log("Group address extracted:", decodedGroup);
-
-      clearFactoryCache();
-      clearRegistryCache();
-      setIsSuccess(true);
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      router.push("/my-equbs");
     } catch (caughtError) {
-      const errorMessage = formatCircleError(caughtError);
-      console.error("Create Equb pipeline failed (original):", caughtError);
-
-      // Map Circle error codes to user-friendly messages
-      if (
-        errorMessage.includes("155113") ||
-        errorMessage.includes("walletId") ||
-        errorMessage.includes("Wallet not found")
-      ) {
-        setError("Wallet not found. Please sign out and sign in again");
-      } else if (errorMessage.includes("155236") || errorMessage.includes("fee")) {
-        setError("Transaction fee error. Try again in a moment");
-      } else if (errorMessage.includes("401") || errorMessage.includes("expired")) {
-        // Token expired, try to refresh and retry
-        setError("Your session expired. Refreshing...");
-        const refreshed = await refreshUserToken();
-        if (refreshed) {
-          setError("Session refreshed. Please try again");
-        } else {
-          setError("Your Circle session expired. Please sign in with your email again");
-        }
-      } else {
-        setError(errorMessage);
-      }
-    } finally {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to create group.");
       setIsLoading(false);
     }
-  }, [encryptionKey, refreshUserToken, router, userId, userToken, walletAddress]);
+  }, [encryptionKey, router, userToken]);
 
-  return { createGroup, isLoading, isSuccess, error, txHash };
+  useEffect(() => {
+    createGroupRef.current = createGroup;
+  }, [createGroup]);
+
+  const retryCreateGroup = useCallback(() => {
+    if (!pendingRequest) return;
+    setPendingRequest(null);
+    setNeedsInitialization(false);
+    void createGroup(...pendingRequest);
+  }, [createGroup, pendingRequest]);
+
+  return { createGroup, retryCreateGroup, needsInitialization, isLoading, isSuccess, error, txHash };
 }

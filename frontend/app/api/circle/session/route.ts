@@ -1,14 +1,13 @@
+import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { initiateUserControlledWalletsClient } from "@circle-fin/user-controlled-wallets";
 
 export async function POST(request: Request) {
   try {
-    const { email, userId: requestedUserId } = (await request.json()) as { email?: string; userId?: string };
+    const { email, deviceId } = (await request.json()) as { email?: string; deviceId?: string };
     const normalizedEmail = email?.trim().toLowerCase();
-    const userId = requestedUserId?.trim() || normalizedEmail || "";
 
-    if (!userId) {
-      return NextResponse.json({ error: "Email or user ID is required." }, { status: 400 });
+    if (!normalizedEmail) {
+      return NextResponse.json({ error: "Email is required." }, { status: 400 });
     }
 
     const apiKey = process.env.CIRCLE_API_KEY;
@@ -16,43 +15,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Circle API key is not configured." }, { status: 500 });
     }
 
-    const client = initiateUserControlledWalletsClient({ apiKey });
-    if (normalizedEmail) {
-      try {
-        await client.createUser({ userId });
-      } catch (error) {
-        const message = error instanceof Error ? error.message.toLowerCase() : "";
-        const code = typeof error === "object" && error !== null && "code" in error
-          ? String((error as { code?: unknown }).code)
-          : "";
-        if (!message.includes("already") && !message.includes("exist") && code !== "155101") {
-          throw error;
-        }
-      }
+    console.log('API Key first 20 chars:', process.env.CIRCLE_API_KEY?.substring(0, 20));
+    console.log('Request URL:', 'https://api.circle.com/v1/w3s/users/email/token');
+    const requestBody = {
+      email: normalizedEmail,
+      deviceId: deviceId || "equb-web-device",
+      idempotencyKey: crypto.randomUUID(),
+    };
+    console.log('Request body:', JSON.stringify(requestBody));
+
+    const response = await fetch('https://api.circle.com/v1/w3s/users/email/token', {
+      method: "POST",
+      headers: {
+        'Authorization': `Bearer ${process.env.CIRCLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+    const payload = (await response.json()) as Record<string, unknown> & { data?: Record<string, unknown> };
+    console.log('Circle API status:', response.status);
+    console.log('Circle API response:', JSON.stringify(payload));
+
+    if (!response.ok) {
+      const message = typeof payload.message === "string" ? payload.message : "Unable to create Circle email session.";
+      return NextResponse.json({ error: message }, { status: response.status });
     }
 
-    const tokenResponse = await client.createUserToken({ userId });
-    const tokenData = tokenResponse.data;
-
-    if (!tokenData?.userToken || !tokenData.encryptionKey) {
-      return NextResponse.json({ error: "Circle did not return user credentials." }, { status: 502 });
-    }
-
-    const walletsResponse = await client.listWallets({ userToken: tokenData.userToken });
-    const wallet = walletsResponse.data?.wallets?.[0];
-
+    const data = payload.data ?? payload;
     return NextResponse.json({
-      userToken: tokenData.userToken,
-      encryptionKey: tokenData.encryptionKey,
-      userId,
-      walletId: wallet?.id ?? null,
-      walletAddress: wallet?.address ?? null,
+      ...data,
+      userToken: data.userToken,
+      encryptionKey: data.encryptionKey,
+      deviceToken: data.deviceToken,
+      deviceEncryptionKey: data.deviceEncryptionKey,
+      otpToken: data.otpToken,
     });
   } catch (error) {
-    console.error("Circle session error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to create Circle session." },
-      { status: 502 },
+      { status: 500 },
     );
   }
 }

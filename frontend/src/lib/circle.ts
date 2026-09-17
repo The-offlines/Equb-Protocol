@@ -1,5 +1,6 @@
-﻿import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
+import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
 
+<<<<<<< Updated upstream
 // Extend W3SSdk type to include methods that exist in the SDK but aren't in type definitions
 declare module "@circle-fin/w3s-pw-web-sdk" {
   interface W3SSdk {
@@ -26,31 +27,48 @@ export function initCircleSdk() {
   if (typeof window === "undefined") {
     return null;
   }
+=======
+type CircleChallengeCallback = (error: Error | undefined, result: { status?: string } | undefined) => void | Promise<void>;
+type CircleEmailCallback = (error: Error | undefined, result: { userToken: string; encryptionKey: string } | undefined) => void | Promise<void>;
 
+let sdk: W3SSdk;
+>>>>>>> Stashed changes
+
+export function getCircleSdk(): W3SSdk {
   if (!sdk) {
-    const appId = process.env.NEXT_PUBLIC_CIRCLE_APP_ID;
-    if (!appId) {
-      throw new Error("Circle app ID is not configured.");
-    }
-
     sdk = new W3SSdk({
-      appSettings: {
-        appId,
+      configs: {
+        appSettings: { appId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID! },
+        authentication: { userToken: "", encryptionKey: "" },
+        socialLoginConfig: {},
       },
-    });
+    } as never);
   }
-
   return sdk;
 }
 
-export type ExecuteContractTxRequest = {
-  userToken: string;
-  encryptionKey: string;
-  walletId: string;
-  contractAddress: string;
-  abiFunctionSignature: string;
-  abiParameters: string[];
-};
+export function initCircleSdk(): W3SSdk | null {
+  if (typeof window === "undefined") return null;
+  return getCircleSdk();
+}
+
+export function executeChallenge(
+  userToken: string,
+  encryptionKey: string,
+  challengeId: string,
+  onCompleted: CircleChallengeCallback,
+) {
+  const circleSdk = getCircleSdk();
+  circleSdk.setAppSettings({ appId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID! });
+  circleSdk.setAuthentication({ userToken, encryptionKey });
+  circleSdk.execute(challengeId, onCompleted as never);
+}
+
+export function verifyEmailOtp(onCompleted: CircleEmailCallback) {
+  const circleSdk = getCircleSdk() as unknown as { onComplete?: CircleEmailCallback; verifyOtp: () => void };
+  circleSdk.onComplete = onCompleted;
+  circleSdk.verifyOtp();
+}
 
 export async function getCircleWalletId(userToken: string, walletAddress?: string): Promise<string> {
   const response = await fetch("/api/circle/wallet-id", {
@@ -67,6 +85,7 @@ export async function getCircleWalletId(userToken: string, walletAddress?: strin
 }
 
 export function formatCircleError(error: unknown): string {
+<<<<<<< Updated upstream
   if (error instanceof Error) {
     const details = error.cause ? `; cause: ${formatCircleError(error.cause)}` : "";
     return `${error.message}${details}`;
@@ -81,6 +100,9 @@ export function formatCircleError(error: unknown): string {
     return "Circle rejected or closed the approval.";
   }
   return typeof error === "string" ? error : "Unknown Circle transaction error.";
+=======
+  return error instanceof Error ? error.message : typeof error === "string" ? error : "Circle transaction failed.";
+>>>>>>> Stashed changes
 }
 
 export async function getContractChallengeId({
@@ -89,31 +111,24 @@ export async function getContractChallengeId({
   contractAddress,
   abiFunctionSignature,
   abiParameters,
-}: Omit<ExecuteContractTxRequest, "encryptionKey">): Promise<string> {
-  console.log("STEP 1: Calling Circle API to create contract challenge", { contractAddress, walletId });
+}: {
+  userToken: string;
+  walletId: string;
+  contractAddress: string;
+  abiFunctionSignature: string;
+  abiParameters: string[];
+}): Promise<string> {
   const response = await fetch("/api/circle/execute-contract", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userToken, walletId, contractAddress, abiFunctionSignature, abiParameters }),
   });
-
-  const payload = (await response.json()) as {
-    challengeId?: string;
-    error?: string;
-    code?: string | number;
-    details?: unknown;
-  };
-  if (!response.ok || !payload.challengeId) {
-    const detail = payload.details === undefined ? "" : `; details: ${JSON.stringify(payload.details)}`;
-    throw new Error(
-      `${payload.error ?? `Circle API HTTP ${response.status}`}${payload.code ? ` (code: ${payload.code})` : ""}${detail}`,
-    );
-  }
-
-  console.log("STEP 2: Got challengeId:", payload.challengeId);
-  return payload.challengeId;
+  const data = (await response.json()) as { challengeId?: string; error?: string };
+  if (!response.ok || !data.challengeId) throw new Error(data.error ?? "Unable to create Circle challenge.");
+  return data.challengeId;
 }
 
+<<<<<<< Updated upstream
 export function executeChallenge(
   challengeId: string,
   userToken: string,
@@ -200,9 +215,16 @@ export async function pollTransactionStatus(challengeId: string, userToken: stri
     if (["FAILED", "DENIED", "CANCELLED"].includes(state)) {
       throw new Error(`Circle transaction ${state.toLowerCase()}${transaction?.errorReason ? `: ${transaction.errorReason}` : ""}.`);
     }
+=======
+export async function pollTransactionStatus(walletId: string, userToken: string): Promise<string> {
+  const response = await fetch(`/api/circle/transactions?userToken=${encodeURIComponent(userToken)}&walletId=${encodeURIComponent(walletId)}`);
+  const data = (await response.json()) as { transactions?: Array<{ state?: string; txHash?: string }>; error?: string };
+  const transaction = data.transactions?.[0];
+  if (!response.ok || transaction?.state !== "COMPLETE" || !transaction.txHash) {
+    throw new Error(data.error ?? "Circle transaction is not complete.");
+>>>>>>> Stashed changes
   }
-
-  throw new Error(`Transaction polling timed out after ${maxAttempts * intervalMs / 1000}s`);
+  return transaction.txHash;
 }
 
 export async function executeEmbeddedContractTransaction({
@@ -212,18 +234,21 @@ export async function executeEmbeddedContractTransaction({
   contractAddress,
   abiFunctionSignature,
   abiParameters,
-}: ExecuteContractTxRequest): Promise<string> {
-  const challengeId = await getContractChallengeId({
-    userToken,
-    walletId,
-    contractAddress,
-    abiFunctionSignature,
-    abiParameters,
+}: {
+  userToken: string;
+  encryptionKey: string;
+  walletId: string;
+  contractAddress: string;
+  abiFunctionSignature: string;
+  abiParameters: string[];
+}): Promise<string> {
+  const challengeId = await getContractChallengeId({ userToken, walletId, contractAddress, abiFunctionSignature, abiParameters });
+  await new Promise<void>((resolve, reject) => {
+    executeChallenge(userToken, encryptionKey, challengeId, (error, result) => {
+      if (error) reject(new Error(error.message ?? "Circle challenge failed."));
+      else if (result?.status === "COMPLETE") resolve();
+      else reject(new Error("Circle challenge failed."));
+    });
   });
-
-  await executeChallenge(challengeId, userToken, encryptionKey);
-
   return pollTransactionStatus(walletId, userToken);
 }
-
-export { sdk };

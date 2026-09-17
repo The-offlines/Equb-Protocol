@@ -21,6 +21,7 @@ async function findArcWallet(client: CircleClient, userToken: string) {
 
 export async function POST(request: Request) {
   try {
+<<<<<<< Updated upstream
     const { email, deviceId, userId, userToken, encryptionKey, challengeId } = (await request.json()) as {
       email?: string;
       deviceId?: string;
@@ -28,6 +29,11 @@ export async function POST(request: Request) {
       userToken?: string;
       encryptionKey?: string;
       challengeId?: string;
+=======
+    const { email, deviceId } = (await request.json()) as {
+      email?: string;
+      deviceId?: string;
+>>>>>>> Stashed changes
     };
 
     const isVerificationRequest = Boolean(userToken || encryptionKey || challengeId);
@@ -81,10 +87,15 @@ export async function POST(request: Request) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const userIdForCreation = userId || `equb-${normalizedEmail}`;
+    const userId = normalizedEmail;
 
+    // Email login is tied to a Circle user. Creating the deterministic user
+    // before issuing the device token also gives the client a userId to use
+    // when it completes wallet setup. Circle returns an error when the user
+    // already exists, which is the normal sign-in path, so ignore only that
+    // idempotent conflict.
     try {
-      await client.createUser({ userId: userIdForCreation });
+      await client.createUser({ userId });
     } catch (error) {
       const message = error instanceof Error ? error.message.toLowerCase() : "";
       const code = typeof error === "object" && error !== null && "code" in error
@@ -114,6 +125,7 @@ export async function POST(request: Request) {
       deviceToken: data.deviceToken,
       deviceEncryptionKey: data.deviceEncryptionKey,
       otpToken: data.otpToken,
+      userId,
     });
 
   } catch (error) {
