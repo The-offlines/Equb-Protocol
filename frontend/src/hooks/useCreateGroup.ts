@@ -78,7 +78,6 @@ export function useCreateGroup() {
         throw new Error(walletData.error ?? "Unable to fetch Circle wallet.");
       }
 
-      const contributionAmountWei = BigInt(contributionAmount) * BigInt(10 ** 18);
       const challengeResponse = await fetch("/api/circle/execute-contract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -86,7 +85,7 @@ export function useCreateGroup() {
           userToken,
           walletId: walletData.walletId,
           name,
-          contributionAmount: contributionAmountWei.toString(),
+          contributionAmount: BigInt(Math.round(contributionAmount * 1e18)).toString(),
           maxMembers,
           interval,
           isPrivate,

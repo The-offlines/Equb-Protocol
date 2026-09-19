@@ -3,14 +3,16 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    const { transactionId, challengeId, userToken } = (await request.json()) as {
+    const body = (await request.json()) as {
       transactionId?: string;
+      challengeId?: string;
       userToken?: string;
       contractAddress?: string;
       walletId?: string;
     };
     const walletId = body.walletId;
     const transactionId = body.transactionId;
+    const challengeId = body.challengeId;
     const userToken = body.userToken ?? request.headers.get("x-user-token") ?? undefined;
 
     if (!walletId || !userToken) {
