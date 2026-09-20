@@ -17,6 +17,21 @@ FROM_EMAIL = os.getenv("FROM_EMAIL")
 
 resend.api_key = RESEND_API_KEY
 
+# Startup validation
+if not DATABASE_URL:
+    print("ERROR: DATABASE_URL is not set")
+    exit(1)
+if not RESEND_API_KEY:
+    print("ERROR: RESEND_API_KEY is not set")
+    exit(1)
+if not FROM_EMAIL:
+    print("ERROR: FROM_EMAIL is not set")
+    exit(1)
+
+print(f"[{datetime.now(timezone.utc).isoformat()}] Starting Equb scheduler...")
+print(f"[{datetime.now(timezone.utc).isoformat()}] FROM_EMAIL: {FROM_EMAIL}")
+print(f"[{datetime.now(timezone.utc).isoformat()}] DATABASE_URL configured: {bool(DATABASE_URL)}")
+
 def send_reminder_email(email, name, group_name, due_date, type_str):
     if type_str == "24h_reminder":
         subject = "Payment Due Tomorrow ⏰"
