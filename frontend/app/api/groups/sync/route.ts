@@ -80,6 +80,28 @@ export async function POST(request: NextRequest) {
     });
     console.log("[SYNC] Dagna member upserted successfully");
 
+    // Send group created email to the creator
+    try {
+      const creator = await prisma.user.findUnique({
+        where: { walletAddress: verifiedWalletAddress },
+      });
+
+      if (creator?.email) {
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notifications`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            walletAddress: verifiedWalletAddress,
+            groupId: group.id,
+            type: "MEMBER_JOINED",
+            txHash: null,
+          }),
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to send group created email", e);
+    }
+
     return NextResponse.json({ group });
   } catch (error) {
     console.error("POST /api/groups/sync error:", error);

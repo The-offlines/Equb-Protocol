@@ -82,6 +82,22 @@ export function useContribute(groupAddress: string) {
       setTxHash(hash);
       setIsSuccess(true);
       window.dispatchEvent(new Event("equb-data-updated"));
+
+      // Send payment confirmed email
+      try {
+        await fetch("/api/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            walletAddress,
+            groupId: null,
+            type: "PAYMENT_CONFIRMED",
+            txHash: hash,
+          }),
+        });
+      } catch (e) {
+        console.warn("Failed to send payment confirmation email", e);
+      }
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "Contribution failed";
       const normalizedMessage = message.toLowerCase();

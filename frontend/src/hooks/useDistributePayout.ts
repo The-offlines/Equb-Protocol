@@ -68,13 +68,29 @@ export function useDistributePayout(groupAddress: string) {
         throw new Error(challengeData.error ?? "Unable to create Circle contract challenge.");
       }
 
-      executeChallenge(userToken, encryptionKey, challengeData.challengeId, (challengeError, result) => {
+      executeChallenge(userToken, encryptionKey, challengeData.challengeId, async (challengeError, result) => {
         if (challengeError) {
           setError(challengeError.message);
           setIsLoading(false);
         } else if (result?.status === "COMPLETE") {
           setIsSuccess(true);
           setIsLoading(false);
+
+          // Send round winner email
+          try {
+            await fetch("/api/notifications", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                walletAddress: groupAddress,
+                groupId: null,
+                type: "ROUND_WINNER",
+                txHash: null,
+              }),
+            });
+          } catch (e) {
+            console.warn("Failed to send round winner email", e);
+          }
         } else {
           setError("Contract execution failed or was rejected.");
           setIsLoading(false);
