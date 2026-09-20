@@ -39,7 +39,7 @@ export function useGroup(address?: Address | string) {
         return;
       }
 
-      const [groupName, dagna, contributionAmount, maxMembers, memberCount, currentRound, status, interval, isPrivate, emergencyMode, members, currentPool] =
+      const [groupName, dagna, contributionAmount, maxMembers, memberCount, currentRound, status, interval, isPrivate, emergencyMode, members, currentPool, manualPayout] =
         await readContractBatch([
           { address: groupAddress, abi: EqubGroup, functionName: "groupName" },
           { address: groupAddress, abi: EqubGroup, functionName: "dagna" },
@@ -53,7 +53,10 @@ export function useGroup(address?: Address | string) {
           { address: groupAddress, abi: EqubGroup, functionName: "emergencyMode" },
           { address: groupAddress, abi: EqubGroup, functionName: "getMembers" },
           { address: groupAddress, abi: EqubGroup, functionName: "getCurrentPool" },
+          { address: groupAddress, abi: EqubGroup, functionName: "manualPayout" },
         ]);
+
+      console.log('Contract contributionAmount raw:', (contributionAmount as bigint).toString());
 
       const memberAddresses = (members as Address[]) ?? [];
       const memberInfos = memberAddresses.length === 0
@@ -78,6 +81,25 @@ export function useGroup(address?: Address | string) {
         };
       });
 
+      const currentRoundNumber = Number(currentRound);
+      
+      const pastWinnerRounds = Array.from({ length: currentRoundNumber - 1 }, (_, i) => i + 1);
+      const pastWinnerAddresses = pastWinnerRounds.length === 0
+        ? []
+        : await readContractBatch(
+            pastWinnerRounds.map((round) => ({
+              address: groupAddress,
+              abi: EqubGroup,
+              functionName: "roundWinner",
+              args: [round],
+            })),
+          );
+
+      const pastWinners = pastWinnerRounds.map((round, index) => ({
+        round,
+        winner: pastWinnerAddresses[index] as Address,
+      })).filter(pw => pw.winner && pw.winner !== "0x0000000000000000000000000000000000000000");
+
       setData({
         groupName: String(groupName),
         dagna: dagna as Address,
@@ -92,6 +114,8 @@ export function useGroup(address?: Address | string) {
         members: memberAddresses,
         memberDetails,
         currentPool: currentPool as bigint,
+        pastWinners,
+        manualPayout: Boolean(manualPayout),
       });
     } catch (caughtError) {
       console.warn("useGroup read failed; Arc RPC will be retried on the next refresh.");

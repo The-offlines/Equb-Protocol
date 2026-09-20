@@ -15,6 +15,7 @@ const initialValues = {
   contributionAmount: "",
   maxMembers: "8",
   interval: "0",
+  manualPayout: false,
 };
 
 const steps = ["Group basics", "Rules", "Review"];
@@ -104,6 +105,7 @@ export default function CreatePage() {
       memberCount,
       Number(formValues.interval),
       true,
+      formValues.manualPayout,
     );
   };
 
@@ -262,6 +264,38 @@ export default function CreatePage() {
                         <span className="mt-1 block text-xs text-[#6C6885]">{description}</span>
                       </button>
                     ))}
+                  </div>
+                </fieldset>
+
+                <fieldset className="space-y-3">
+                  <legend className="text-sm font-semibold text-[#1F1B3A]">Payout Distribution</legend>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      aria-pressed={!formValues.manualPayout}
+                      onClick={() => handleChange("manualPayout", false)}
+                      className={`rounded-2xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5A4BDB]/50 ${
+                        !formValues.manualPayout
+                          ? "border-[#5A4BDB] bg-[#F0ECFF] text-[#5A4BDB]"
+                          : "border-[#1F1B3A]/10 bg-[#F8F7F5] text-[#1F1B3A] hover:border-[#5A4BDB]/30"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 font-bold">Automatic</span>
+                      <span className="mt-1 block text-xs text-[#6C6885]">The smart contract instantly transfers the pool to the winner once all members have contributed. (Recommended)</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={formValues.manualPayout}
+                      onClick={() => handleChange("manualPayout", true)}
+                      className={`rounded-2xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5A4BDB]/50 ${
+                        formValues.manualPayout
+                          ? "border-[#5A4BDB] bg-[#F0ECFF] text-[#5A4BDB]"
+                          : "border-[#1F1B3A]/10 bg-[#F8F7F5] text-[#1F1B3A] hover:border-[#5A4BDB]/30"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 font-bold">Manual Review</span>
+                      <span className="mt-1 block text-xs text-[#6C6885]">The smart contract holds the pool until the Dagna clicks 'Distribute Payout', allowing you to verify off-chain conditions.</span>
+                    </button>
                   </div>
                 </fieldset>
 

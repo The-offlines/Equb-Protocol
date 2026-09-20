@@ -24,6 +24,7 @@ import { formatUsdcAmount } from "@/src/lib/format";
 import { publicClient } from "@/src/lib/arc";
 import { EqubGroup } from "@/src/lib/contract";
 import { useInviteMember } from "@/src/hooks/useInviteMember";
+import { useRemoveMember } from "@/src/hooks/useRemoveMember";
 import type { GroupDetail, GroupMember, Winner } from "@/types";
 
 const shortenAddress = (value?: string) => {
@@ -42,6 +43,7 @@ export default function GroupDetailPage() {
   const { currentRound, currentPool, status, refetch: refetchTreasury } = treasury;
   const { contribute, isLoading: isContributing, isSuccess: contributionSuccess, error: contributionError, txHash } = useContribute(params?.address ?? "");
   const { inviteMember, isLoading: isInviting, error: inviteError } = useInviteMember(params?.address ?? "");
+  const { removeMember, isLoading: isRemoving, error: removeError, isSuccess: removeSuccess } = useRemoveMember(params?.address ?? "");
   const { walletAddress } = useCircleContext();
   const [canContribute, setCanContribute] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -83,6 +85,19 @@ export default function GroupDetailPage() {
     }
     if (!contributionSuccess) lastContributionSuccess.current = false;
   }, [contributionSuccess, refetchGroup, refetchTreasury]);
+
+  useEffect(() => {
+    if (removeSuccess) {
+      setToast({ message: "Member removed successfully", type: "success" });
+      void refetchGroup();
+    }
+  }, [removeSuccess, refetchGroup]);
+
+  useEffect(() => {
+    if (removeError) {
+      setToast({ message: removeError, type: "error" });
+    }
+  }, [removeError]);
 
   useEffect(() => {
     const handleDataUpdated = () => {
@@ -170,7 +185,22 @@ export default function GroupDetailPage() {
       };
     });
 
-    const winners: Winner[] = [];
+    const winners: Winner[] = (data.pastWinners || []).map((pw) => {
+      const isDagna = pw.winner === data.dagna;
+      const winnerIndex = data.members ? data.members.indexOf(pw.winner) : -1;
+      const winnerName = isDagna ? dagnaName : winnerIndex >= 0 ? `Member ${winnerIndex + 1}` : shortenAddress(pw.winner);
+      const winnerAvatar = isDagna ? dagnaName.slice(0, 2).toUpperCase() : winnerIndex >= 0 ? `M${winnerIndex + 1}` : "W";
+      
+      return {
+        id: `${pw.round}-${pw.winner}`,
+        name: winnerName,
+        wallet: pw.winner,
+        avatar: winnerAvatar,
+        round: pw.round,
+        amount: contributionAmount * data.memberCount,
+        paidAt: new Date().toISOString(),
+      };
+    });
 
     return {
       id: params?.address ?? data.dagna,
@@ -187,6 +217,7 @@ export default function GroupDetailPage() {
       interval: data.interval === 1 ? "monthly" : "weekly",
       maxMembers: Number(data.maxMembers ?? 1),
       poolValue: formatUsdcAmount(data.currentPool),
+      manualPayout: data.manualPayout,
       members: normalizedMembers,
       winners,
     };
@@ -259,6 +290,10 @@ export default function GroupDetailPage() {
           onInviteMember={inviteMember}
           isInviting={isInviting}
           inviteError={inviteError}
+          onSuccess={() => {
+            void refetchGroup();
+            void refetchTreasury();
+          }}
         />
 
         <motion.section
@@ -300,7 +335,12 @@ export default function GroupDetailPage() {
           className="space-y-4"
         >
           <h2 className="text-xl font-bold tracking-[-0.05em] text-[#1F1B3A]">Members</h2>
-          <MemberTable members={group.members} />
+          <MemberTable
+            members={group.members}
+            isOwner={Boolean(walletAddress && data?.dagna && walletAddress.toLowerCase() === data.dagna.toLowerCase())}
+            onRemoveMember={removeMember}
+            isRemoving={isRemoving}
+          />
         </motion.section>
 
         <motion.section

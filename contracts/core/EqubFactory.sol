@@ -73,7 +73,8 @@ contract EqubFactory is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         uint256 contributionAmount,
         uint32 maxMembers,
         uint8 interval,
-        bool isPrivate
+        bool isPrivate,
+        bool manualPayout
     ) external returns (address group) {
         if (bytes(name).length == 0) revert EmptyName();
         if (contributionAmount == 0) revert InvalidContributionAmount();
@@ -89,7 +90,8 @@ contract EqubFactory is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             contributionAmount,
             maxMembers,
             interval,
-            isPrivate
+            isPrivate,
+            manualPayout
         );
 
         group = address(new ERC1967Proxy(equbGroupImplementation, initData));

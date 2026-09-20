@@ -11,12 +11,14 @@ interface IEqubGroup {
     /// @param maxMembers     Maximum number of participants (3-50).
     /// @param interval       Cycle cadence: 0 = Weekly, 1 = Monthly.
     /// @param isPrivate      Whether the group requires an invite to join.
+    /// @param manualPayout   Whether the Dagna must manually trigger payouts instead of automatic.
     function initialize(
         address dagna,
         string calldata name,
         uint256 contributionAmount,
         uint32 maxMembers,
         uint8 interval,
-        bool isPrivate
+        bool isPrivate,
+        bool manualPayout
     ) external;
 }

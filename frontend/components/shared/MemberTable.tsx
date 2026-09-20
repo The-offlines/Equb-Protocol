@@ -4,11 +4,14 @@ import type { GroupMember } from "@/types";
 
 type MemberTableProps = {
   members: GroupMember[];
+  isOwner?: boolean;
+  onRemoveMember?: (wallet: string) => void;
+  isRemoving?: boolean;
 };
 
 const shortenWallet = (wallet: string) => `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
 
-export function MemberTable({ members }: MemberTableProps) {
+export function MemberTable({ members, isOwner, onRemoveMember, isRemoving }: MemberTableProps) {
   return (
     <div className="overflow-hidden rounded-2xl border border-[#1F1B3A]/5 bg-white shadow-[0_12px_30px_rgba(31,27,58,0.04)]">
       <div className="overflow-x-auto">
@@ -21,6 +24,7 @@ export function MemberTable({ members }: MemberTableProps) {
               <th className="px-4 py-3 font-semibold">Paid Status</th>
               <th className="px-4 py-3 font-semibold">Received Payout</th>
               <th className="px-4 py-3 font-semibold">Joined Date</th>
+              {isOwner && <th className="px-4 py-3 font-semibold text-right">Actions</th>}
             </tr>
           </thead>
 
@@ -69,6 +73,22 @@ export function MemberTable({ members }: MemberTableProps) {
                 </td>
 
                 <td className="px-4 py-3 text-sm text-[#6C6885]">{member.joinedAt}</td>
+
+                {isOwner ? (
+                  <td className="px-4 py-3 text-right">
+                    {/* Don't show remove button for the Dagna themselves or if they've received a payout/paid current round */}
+                    {index > 0 && !member.hasReceived && !member.hasPaid ? (
+                      <button
+                        type="button"
+                        onClick={() => onRemoveMember?.(member.wallet)}
+                        disabled={isRemoving}
+                        className="inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-bold text-[#B4234D] transition hover:bg-[#FFF0F3] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>

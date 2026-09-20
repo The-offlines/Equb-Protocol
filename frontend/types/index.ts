@@ -50,6 +50,7 @@ export interface GroupDetail {
   interval: "weekly" | "monthly";
   maxMembers: number;
   poolValue: number;
+  manualPayout: boolean;
   members: GroupMember[];
   winners: Winner[];
 }

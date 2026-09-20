@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import { Check, CheckCircle2, Copy, Link2, Loader2, PiggyBank, ShieldCheck, Users, X } from "lucide-react";
 
 import type { GroupDetail } from "@/types";
+import { useActivateGroup } from "@/src/hooks/useActivateGroup";
+import { useDistributePayout } from "@/src/hooks/useDistributePayout";
+import { Toast } from "@/components/shared/Toast";
 
 type GroupHeroProps = {
   group: GroupDetail;
@@ -16,6 +19,7 @@ type GroupHeroProps = {
   onInviteMember?: (address: string) => Promise<boolean>;
   isInviting?: boolean;
   inviteError?: string | null;
+  onSuccess?: () => void;
 };
 
 const statusStyles: Record<GroupDetail["status"], string> = {
@@ -42,11 +46,15 @@ export function GroupHero({
   onInviteMember,
   isInviting = false,
   inviteError = null,
+  onSuccess,
 }: GroupHeroProps) {
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [invitee, setInvitee] = useState("");
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const { activateGroup, isLoading: isActivating, isSuccess: activateSuccess, error: activateError } = useActivateGroup(groupAddress);
+  const { distributePayout, isLoading: isDistributing, isSuccess: distributeSuccess, error: distributeError } = useDistributePayout(groupAddress);
   const paidCount = group.paidCount;
   const progressValue = group.memberCount > 0 ? Math.min((paidCount / group.memberCount) * 100, 100) : 0;
   const inviteCode = `EQB-${groupAddress.slice(2, 6).toUpperCase()}`;
@@ -62,6 +70,23 @@ export function GroupHero({
       setInviteMessage("Copying is unavailable. Share the invite code instead.");
     }
   };
+
+  useEffect(() => {
+    if (activateSuccess) {
+      setToast({ message: "Group activated successfully!", type: "success" });
+      onSuccess?.();
+    }
+    if (activateError) {
+      setToast({ message: activateError, type: "error" });
+    }
+    if (distributeSuccess) {
+      setToast({ message: "Payout distributed successfully!", type: "success" });
+      onSuccess?.();
+    }
+    if (distributeError) {
+      setToast({ message: distributeError, type: "error" });
+    }
+  }, [activateSuccess, activateError, distributeSuccess, distributeError, onSuccess]);
 
   const handleInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -84,6 +109,9 @@ export function GroupHero({
     <motion.section
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
+      onAnimationStart={() => {
+        console.log("GroupHero render - isOwner:", isOwner, "group.status:", group.status);
+      }}
       transition={{ duration: 0.35, ease: "easeOut" }}
       className="rounded-3xl border border-[#1F1B3A]/8 bg-white p-5 shadow-[0_14px_35px_rgba(31,27,58,0.06)] sm:p-6"
     >
@@ -98,14 +126,32 @@ export function GroupHero({
                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> Invite-only
               </span>
             ) : null}
-            {isOwner && group.status === "forming" ? (
-              <button
-                type="button"
-                onClick={() => setIsInviteOpen(true)}
-                className="ml-auto inline-flex min-h-9 items-center gap-2 rounded-xl bg-[#5A4BDB] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#493bc5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5A4BDB]/50"
-              >
-                <Users className="h-4 w-4" aria-hidden="true" /> Invite member
-              </button>
+            {(isOwner && (group.status === "forming" || group.status === "active")) ? (
+              <div className="ml-auto flex flex-col items-end gap-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsInviteOpen(true)}
+                    className="inline-flex min-h-9 items-center gap-2 rounded-xl bg-[#5A4BDB] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#493bc5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5A4BDB]/50"
+                  >
+                    <Users className="h-4 w-4" aria-hidden="true" /> Invite member
+                  </button>
+                  {group.status === "forming" && group.memberCount >= 3 ? (
+                    <button
+                      type="button"
+                      onClick={activateGroup}
+                      disabled={isActivating}
+                      className="inline-flex min-h-9 items-center gap-2 rounded-xl bg-green-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {isActivating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+                      {isActivating ? "Activating..." : "Activate Group"}
+                    </button>
+                  ) : null}
+                </div>
+                {group.status === "forming" && group.memberCount < 3 ? (
+                  <p className="text-[10px] text-[#6C6885]">Requires minimum 3 members to activate</p>
+                ) : null}
+              </div>
             ) : null}
           </div>
 
@@ -167,6 +213,12 @@ export function GroupHero({
               {isContributing ? "Processing contribution..." : "Contribute now"}
             </button>
           ) : null}
+
+          {isOwner && group.status === "active" && group.manualPayout && paidCount === group.memberCount && group.memberCount > 0 ? (
+            <button type="button" onClick={() => void distributePayout()} disabled={isDistributing} className="mt-5 w-full rounded-2xl border border-[#5A4BDB] bg-white px-4 py-3 text-sm font-bold text-[#5A4BDB] transition hover:bg-[#F0ECFF] disabled:cursor-not-allowed disabled:opacity-70">
+              {isDistributing ? "Distributing payout..." : "Distribute Payout"}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -222,6 +274,8 @@ export function GroupHero({
           </motion.div>
         </div>
       ) : null}
+
+      {toast ? <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /> : null}
     </motion.section>
   );
 }

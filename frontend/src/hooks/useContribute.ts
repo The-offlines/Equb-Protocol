@@ -64,9 +64,20 @@ export function useContribute(groupAddress: string) {
         contractAddress: address,
         abiFunctionSignature: "contribute()",
         abiParameters: [],
+        value: contributionAmount.toString(),
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash: hash as `0x${string}` });
       if (receipt.status === "reverted") throw new Error("Transaction reverted");
+
+      try {
+        await fetch("/api/member/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userToken, contractAddress: groupAddress }),
+        });
+      } catch (e) {
+        console.warn("Failed to sync member metadata", e);
+      }
 
       setTxHash(hash);
       setIsSuccess(true);

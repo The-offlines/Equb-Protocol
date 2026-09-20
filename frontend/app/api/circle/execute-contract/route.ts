@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initiateUserControlledWalletsClient } from "@circle-fin/user-controlled-wallets";
 import crypto from "crypto";
+import { FACTORY_ADDRESS as DEFAULT_CONTRACT_ADDRESS } from "@/src/lib/contract";
 
-// EqubFactory address used for the `createGroup(...)` flow when the caller
-// only sends the flat group fields (name, contributionAmount, maxMembers, ...).
-const DEFAULT_CONTRACT_ADDRESS = "0xe8eb461A424a4702473aCC35ad9ADA2bbb8BFAdA";
-const CREATE_GROUP_SIGNATURE = "createGroup(string,uint256,uint32,uint8,bool)";
+const CREATE_GROUP_SIGNATURE = "createGroup(string,uint256,uint32,uint8,bool,bool)";
 
 type ExecuteContractBody = {
   userToken?: string;
@@ -16,10 +14,12 @@ type ExecuteContractBody = {
   maxMembers?: number | string;
   interval?: number | string;
   isPrivate?: boolean;
+  manualPayout?: boolean;
   // Explicit contract-call fields (used by contribute/join/invite flows).
   contractAddress?: string;
   abiFunctionSignature?: string;
   abiParameters?: string[];
+  value?: string;
 };
 
 type ContractExecutionRequest = {
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         abiParameters: body.abiParameters,
       };
     } else {
-      const { name, contributionAmount, maxMembers, interval, isPrivate } = body;
+      const { name, contributionAmount, maxMembers, interval, isPrivate, manualPayout } = body;
 
       const hasContribution =
         contributionAmount !== undefined &&
@@ -89,7 +89,9 @@ export async function POST(req: NextRequest) {
         interval === undefined ||
         interval === null ||
         isPrivate === undefined ||
-        isPrivate === null
+        isPrivate === null ||
+        manualPayout === undefined ||
+        manualPayout === null
       ) {
         return NextResponse.json(
           { error: "Group details are required." },
@@ -106,6 +108,7 @@ export async function POST(req: NextRequest) {
           String(maxMembers),
           String(interval),
           isPrivate ? "true" : "false",
+          manualPayout ? "true" : "false",
         ],
       };
     }
@@ -119,15 +122,23 @@ export async function POST(req: NextRequest) {
 
     const client = initiateUserControlledWalletsClient({ apiKey });
 
-    const response = await client.createUserTransactionContractExecutionChallenge({
+    const contractExecutionParams: any = {
       userToken,
       walletId,
       contractAddress: request.contractAddress,
       abiFunctionSignature: request.abiFunctionSignature,
       abiParameters: request.abiParameters,
-      fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+      fee: { type: "level", config: { feeLevel: "HIGH" } },
       idempotencyKey: crypto.randomUUID(),
-    });
+    };
+
+    const amountInWholeUnits = body.value ? (BigInt(body.value) / 1000000000000000000n).toString() : undefined;
+
+    if (amountInWholeUnits && amountInWholeUnits !== "0") {
+      contractExecutionParams.amount = amountInWholeUnits;
+    }
+
+    const response = await client.createUserTransactionContractExecutionChallenge(contractExecutionParams);
 
     const challengeId = response.data?.challengeId;
     console.log("Circle contract execution response:", JSON.stringify(response.data));

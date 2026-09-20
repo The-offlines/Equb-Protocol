@@ -21,6 +21,10 @@ contract EqubGroup is Initializable, OwnableUpgradeable, UUPSUpgradeable, Reentr
     error RecipientNotMember();
     error TransferFailed();
 
+    error CannotRemovePaidMember();
+    error CannotRemoveWinner();
+    error NotFullyFunded();
+
     enum Interval { Weekly, Monthly }
     enum GroupStatus { Forming, Active, Completed, Cancelled }
 
@@ -50,12 +54,14 @@ contract EqubGroup is Initializable, OwnableUpgradeable, UUPSUpgradeable, Reentr
 
     bool public emergencyMode;
     address public emergencyRecipient;
+    bool public manualPayout;
 
     event MemberJoined(address indexed member);
     event ContributionPaid(address indexed member, uint32 indexed round, uint256 amount);
     event RoundCompleted(uint32 indexed round, address indexed winner, uint256 payout);
     event EmergencyApproved(address indexed recipient, uint32 round);
     event GroupActivated(uint64 startTime);
+    event MemberRemoved(address indexed member);
 
     modifier onlyDagna() {
         if (msg.sender != dagna) revert NotDagna();
@@ -78,7 +84,8 @@ contract EqubGroup is Initializable, OwnableUpgradeable, UUPSUpgradeable, Reentr
         uint256 _contributionAmount,
         uint32 _maxMembers,
         uint8 _interval,
-        bool _isPrivate
+        bool _isPrivate,
+        bool _manualPayout
     ) external initializer {
         __Ownable_init(_dagna);
         dagna = _dagna;
@@ -88,6 +95,7 @@ contract EqubGroup is Initializable, OwnableUpgradeable, UUPSUpgradeable, Reentr
         interval = Interval(_interval);
         isPrivate = _isPrivate;
         status = GroupStatus.Forming;
+        manualPayout = _manualPayout;
         _addMember(_dagna);
     }
 
@@ -100,7 +108,7 @@ contract EqubGroup is Initializable, OwnableUpgradeable, UUPSUpgradeable, Reentr
     }
 
     function inviteMember(address invitee) external onlyDagna {
-        if (status != GroupStatus.Forming) revert NotForming();
+        if (status != GroupStatus.Forming && status != GroupStatus.Active) revert NotForming();
         if (memberInfo[invitee].joined) revert AlreadyMember();
         if (memberCount >= maxMembers) revert GroupFull();
         _addMember(invitee);
@@ -127,6 +135,27 @@ contract EqubGroup is Initializable, OwnableUpgradeable, UUPSUpgradeable, Reentr
         emit GroupActivated(uint64(block.timestamp));
     }
 
+    function removeMember(address member) external onlyDagna {
+        if (!memberInfo[member].joined) revert NotMember();
+        if (memberInfo[member].paidCurrentRound) revert CannotRemovePaidMember();
+        if (memberInfo[member].receivedPayout) revert CannotRemoveWinner();
+
+        memberInfo[member].joined = false;
+
+        uint256 len = members.length;
+        for (uint256 i = 0; i < len;) {
+            if (members[i] == member) {
+                members[i] = members[len - 1];
+                members.pop();
+                break;
+            }
+            unchecked { ++i; }
+        }
+
+        unchecked { --memberCount; }
+        emit MemberRemoved(member);
+    }
+
     function contribute() external payable onlyActive onlyMember nonReentrant {
         if (msg.value != contributionAmount) revert WrongAmount();
         Member storage m = memberInfo[msg.sender];
@@ -134,9 +163,14 @@ contract EqubGroup is Initializable, OwnableUpgradeable, UUPSUpgradeable, Reentr
         m.paidCurrentRound = true;
         unchecked { ++paidCount; }
         emit ContributionPaid(msg.sender, currentRound, msg.value);
-        if (paidCount == memberCount) {
+        if (paidCount == memberCount && !manualPayout) {
             _completeRound();
         }
+    }
+
+    function distributePayout() external onlyDagna onlyActive nonReentrant {
+        if (paidCount != memberCount) revert NotFullyFunded();
+        _completeRound();
     }
 
     function _completeRound() internal {
@@ -149,12 +183,29 @@ contract EqubGroup is Initializable, OwnableUpgradeable, UUPSUpgradeable, Reentr
             emergencyRecipient = address(0);
         } else {
             uint256 len = members.length;
+            uint256 eligibleCount = 0;
             for (uint256 i = 0; i < len;) {
                 if (!memberInfo[members[i]].receivedPayout) {
-                    winner = members[i];
-                    break;
+                    unchecked { ++eligibleCount; }
                 }
                 unchecked { ++i; }
+            }
+
+            if (eligibleCount > 0) {
+                uint256 randomValue = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, currentRound, msg.sender)));
+                uint256 winnerIndex = randomValue % eligibleCount;
+                
+                uint256 currentIndex = 0;
+                for (uint256 i = 0; i < len;) {
+                    if (!memberInfo[members[i]].receivedPayout) {
+                        if (currentIndex == winnerIndex) {
+                            winner = members[i];
+                            break;
+                        }
+                        unchecked { ++currentIndex; }
+                    }
+                    unchecked { ++i; }
+                }
             }
         }
 

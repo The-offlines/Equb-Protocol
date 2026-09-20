@@ -7,9 +7,9 @@ import groupArtifact from "@/src/lib/contracts/EqubGroup.json";
 import registryArtifact from "@/src/lib/contracts/EqubRegistry.json";
 
 export const ZERO_ADDRESS: Address = "0x0000000000000000000000000000000000000000";
-export const FACTORY_ADDRESS: Address = "0xe8eb461A424a4702473aCC35ad9ADA2bbb8BFAdA";
-export const REGISTRY_ADDRESS: Address = "0xB699C7ED2d72Cef7330A4265f2018AbC959D4598";
-export const GROUP_IMPL_ADDRESS: Address = "0x7C40e9b11377b7B2a9a20f72A5d501D1AB601309";
+export const FACTORY_ADDRESS: Address = "0x01897C1196d3ec3dE3B2DA77D1033957c6FA113F";
+export const REGISTRY_ADDRESS: Address = "0x586623DBe3eA140cBD26FAD6e42E0190bd02ae22";
+export const GROUP_IMPL_ADDRESS: Address = "0xC1F900599c4F2B55A89064ad8404c5d72E18f0e1";
 
 export const CONTRACT_ADDRESSES = {
   FACTORY_ADDRESS,
@@ -55,6 +55,8 @@ export type GroupContractData = {
   members: Address[];
   memberDetails: GroupContractMember[];
   currentPool: bigint;
+  pastWinners: { round: number; winner: Address }[];
+  manualPayout: boolean;
 };
 
 export type GroupContractMember = {

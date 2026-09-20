@@ -109,17 +109,19 @@ export async function getContractChallengeId({
   contractAddress,
   abiFunctionSignature,
   abiParameters,
+  value,
 }: {
   userToken: string;
   walletId: string;
   contractAddress: string;
   abiFunctionSignature: string;
   abiParameters: string[];
+  value?: string;
 }): Promise<string> {
   const response = await fetch("/api/circle/execute-contract", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userToken, walletId, contractAddress, abiFunctionSignature, abiParameters }),
+    body: JSON.stringify({ userToken, walletId, contractAddress, abiFunctionSignature, abiParameters, value }),
   });
   const data = (await response.json()) as { challengeId?: string; error?: string };
   if (!response.ok || !data.challengeId) throw new Error(data.error ?? "Unable to create Circle challenge.");
@@ -215,13 +217,28 @@ export async function pollTransactionStatus(challengeId: string, userToken: stri
     }
 */
 export async function pollTransactionStatus(walletId: string, userToken: string): Promise<string> {
-  const response = await fetch(`/api/circle/transactions?userToken=${encodeURIComponent(userToken)}&walletId=${encodeURIComponent(walletId)}`);
-  const data = (await response.json()) as { transactions?: Array<{ state?: string; txHash?: string }>; error?: string };
-  const transaction = data.transactions?.[0];
-  if (!response.ok || transaction?.state !== "COMPLETE" || !transaction.txHash) {
-    throw new Error(data.error ?? "Circle transaction is not complete.");
+  const startTime = Date.now() - 2 * 60 * 1000;
+
+  for (let i = 0; i < 12; i++) {
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    const response = await fetch(`/api/circle/transactions?userToken=${encodeURIComponent(userToken)}&walletId=${encodeURIComponent(walletId)}`);
+    const data = (await response.json()) as { transactions?: Array<{ state?: string; txHash?: string; createDate?: string }>; error?: string };
+    
+    const transaction = data.transactions?.find(t => t.createDate && new Date(t.createDate).getTime() >= startTime);
+    
+    if (transaction && (transaction.state === "COMPLETE" || transaction.state === "CONFIRMED")) {
+      if (transaction.txHash) {
+        return transaction.txHash;
+      }
+    }
+    
+    if (transaction && ["FAILED", "DENIED", "CANCELLED"].includes(transaction.state || "")) {
+       throw new Error(data.error ?? `Circle transaction ${transaction.state?.toLowerCase()}.`);
+    }
   }
-  return transaction.txHash;
+
+  throw new Error("Transaction submitted. Please check your group page to confirm.");
 }
 
 export async function executeEmbeddedContractTransaction({
@@ -231,6 +248,7 @@ export async function executeEmbeddedContractTransaction({
   contractAddress,
   abiFunctionSignature,
   abiParameters,
+  value,
 }: {
   userToken: string;
   encryptionKey: string;
@@ -238,8 +256,9 @@ export async function executeEmbeddedContractTransaction({
   contractAddress: string;
   abiFunctionSignature: string;
   abiParameters: string[];
+  value?: string;
 }): Promise<string> {
-  const challengeId = await getContractChallengeId({ userToken, walletId, contractAddress, abiFunctionSignature, abiParameters });
+  const challengeId = await getContractChallengeId({ userToken, walletId, contractAddress, abiFunctionSignature, abiParameters, value });
   await new Promise<void>((resolve, reject) => {
     executeChallenge(userToken, encryptionKey, challengeId, (error, result) => {
       if (error) reject(new Error(error.message ?? "Circle challenge failed."));
