@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
       idempotencyKey: crypto.randomUUID(),
     };
 
-    const amountInWholeUnits = body.value ? (BigInt(body.value) / 1000000000000000000n).toString() : undefined;
+    const amountInWholeUnits = body.value ? (Number(body.value) / 1e18).toString() : undefined;
 
     if (amountInWholeUnits && amountInWholeUnits !== "0") {
       contractExecutionParams.amount = amountInWholeUnits;

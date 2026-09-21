@@ -9,7 +9,7 @@ import { executeEmbeddedContractTransaction, getCircleWalletId } from "@/src/lib
 import { EqubGroup } from "@/src/lib/contract";
 
 export function useContribute(groupAddress: string) {
-  const { walletAddress, userToken, encryptionKey } = useCircleContext();
+  const { walletAddress, walletType, userToken, encryptionKey } = useCircleContext();
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,16 +56,30 @@ export function useContribute(groupAddress: string) {
         return;
       }
 
-      const walletId = await getCircleWalletId(userToken, walletAddress);
-      const hash = await executeEmbeddedContractTransaction({
-        userToken,
-        encryptionKey,
-        walletId,
-        contractAddress: address,
-        abiFunctionSignature: "contribute()",
-        abiParameters: [],
-        value: contributionAmount.toString(),
-      });
+      let hash: string;
+      if (walletType === "external") {
+        const { getWalletClient } = await import("@/src/lib/arc");
+        const walletClient = await getWalletClient(walletAddress as Address);
+        if (!walletClient) throw new Error("Wallet not connected");
+        hash = await walletClient.writeContract({
+          address,
+          abi,
+          functionName: "contribute",
+          value: contributionAmount,
+        });
+      } else {
+        const walletId = await getCircleWalletId(userToken, walletAddress);
+        hash = await executeEmbeddedContractTransaction({
+          userToken,
+          encryptionKey,
+          walletId,
+          contractAddress: address,
+          abiFunctionSignature: "contribute()",
+          abiParameters: [],
+          value: contributionAmount.toString(),
+        });
+      }
+
       const receipt = await publicClient.waitForTransactionReceipt({ hash: hash as `0x${string}` });
       if (receipt.status === "reverted") throw new Error("Transaction reverted");
 
@@ -85,10 +99,10 @@ export function useContribute(groupAddress: string) {
 
       // Send payment confirmed email with real data
       try {
-        const groupRes = await fetch("/api/groups/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userToken, contractAddress: groupAddress }),
+        const groupRes = await fetch('/api/groups/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contractAddress: groupAddress }),
         });
         const groupData = await groupRes.json() as {
           group?: {
@@ -96,50 +110,49 @@ export function useContribute(groupAddress: string) {
             name: string;
             contributionAmount: number;
             maxMembers: number;
+            members: { walletAddress: string; email: string | null }[];
           };
         };
         const group = groupData.group;
 
         // Email to the payer
-        await fetch("/api/notifications", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        await fetch('/api/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             walletAddress,
             groupId: group?.id ?? null,
-            type: "PAYMENT_CONFIRMED",
+            type: 'PAYMENT_CONFIRMED',
             txHash: hash,
             metadata: {
               groupName: group?.name ?? groupAddress,
               contributionAmount: group?.contributionAmount ?? null,
-              subject: `Payment Confirmed ✅`,
-              message: `You have successfully paid ${group?.contributionAmount ?? ''} ARC to the Equb group "${group?.name ?? groupAddress}". Transaction: ${hash}`,
+              txHash: hash,
             },
           }),
         });
 
         // Email to all other group members
         if (group?.id) {
-          await fetch("/api/notifications", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+          await fetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               walletAddress: `group:${group.id}`,
               groupId: group.id,
-              type: "PAYMENT_CONFIRMED",
+              type: 'PAYMENT_CONFIRMED',
               txHash: hash,
               metadata: {
                 groupName: group.name,
                 contributionAmount: group.contributionAmount,
                 paidBy: walletAddress,
-                subject: `Member Payment Update 💰`,
-                message: `Member ${walletAddress} has paid ${group.contributionAmount} ARC to your Equb group "${group.name}".`,
+                txHash: hash,
               },
             }),
           });
         }
       } catch (e) {
-        console.warn("Failed to send payment confirmation email", e);
+        console.warn('Failed to send payment confirmation email', e);
       }
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "Contribution failed";

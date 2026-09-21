@@ -76,20 +76,60 @@ export function useDistributePayout(groupAddress: string) {
           setIsSuccess(true);
           setIsLoading(false);
 
-          // Send round winner email
+          // Send round winner email to winner and all members
           try {
-            await fetch("/api/notifications", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
+            const groupRes = await fetch('/api/groups/lookup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contractAddress: groupAddress }),
+            });
+            const groupData = await groupRes.json() as {
+              group?: {
+                id: string;
+                name: string;
+                contributionAmount: number;
+                maxMembers: number;
+              };
+            };
+            const group = groupData.group;
+
+            // Email to the winner
+            await fetch('/api/notifications', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 walletAddress: groupAddress,
-                groupId: null,
-                type: "ROUND_WINNER",
+                groupId: group?.id ?? null,
+                type: 'ROUND_WINNER',
                 txHash: null,
+                metadata: {
+                  groupName: group?.name ?? groupAddress,
+                  subject: 'You Won This Round! 🎉',
+                  message: `Congratulations! You are the payout winner for this round in "${group?.name ?? groupAddress}". The funds have been sent to your wallet.`,
+                },
               }),
             });
+
+            // Email to all group members
+            if (group?.id) {
+              await fetch('/api/notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  walletAddress: `group:${group.id}`,
+                  groupId: group.id,
+                  type: 'ROUND_WINNER',
+                  txHash: null,
+                  metadata: {
+                    groupName: group.name,
+                    subject: `Round Complete — Payout Distributed! 🏆`,
+                    message: `The payout for this round in "${group.name}" has been distributed successfully. Stay tuned for the next round!`,
+                  },
+                }),
+              });
+            }
           } catch (e) {
-            console.warn("Failed to send round winner email", e);
+            console.warn('Failed to send round winner emails', e);
           }
         } else {
           setError("Contract execution failed or was rejected.");

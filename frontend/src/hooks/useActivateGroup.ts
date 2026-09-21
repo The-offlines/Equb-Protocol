@@ -68,10 +68,10 @@ export function useActivateGroup(groupAddress: string) {
 
             // Send activation email to all group members
             try {
-              const groupRes = await fetch("/api/groups/sync", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userToken, contractAddress: groupAddress }),
+              const groupRes = await fetch('/api/groups/lookup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contractAddress: groupAddress }),
               });
               const groupData = await groupRes.json() as {
                 group?: {
@@ -85,34 +85,26 @@ export function useActivateGroup(groupAddress: string) {
               const group = groupData.group;
 
               if (group?.id) {
-                const membersRes = await fetch(`/api/member/sync`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ userToken, contractAddress: groupAddress }),
-                });
-                const membersData = await membersRes.json() as { member?: { walletAddress: string } };
-
-                await fetch("/api/notifications", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
+                await fetch('/api/notifications', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    walletAddress: membersData.member?.walletAddress ?? groupAddress,
+                    walletAddress: `group:${group.id}`,
                     groupId: group.id,
-                    type: "PAYMENT_REMINDER",
+                    type: 'PAYMENT_REMINDER',
                     txHash: null,
                     metadata: {
+                      subject: `Your Equb Group "${group.name}" is Now Active! 🚀`,
+                      message: `Round 1 has started! Your contribution amount is ${group.contributionAmount} ARC. Please make your payment before the due date.${group.dueDate ? ` Due date: ${new Date(group.dueDate).toLocaleDateString()}` : ''}`,
                       groupName: group.name,
                       contributionAmount: group.contributionAmount,
-                      maxMembers: group.maxMembers,
                       dueDate: group.dueDate,
-                      subject: `Your Equb Group "${group.name}" is Now Active! 🚀`,
-                      message: `Round 1 has started! Your contribution amount is ${group.contributionAmount} ARC. Please make your payment before the due date.`,
                     },
                   }),
                 });
               }
             } catch (e) {
-              console.warn("Failed to send activation emails", e);
+              console.warn('Failed to send activation emails', e);
             }
           } else if (result?.status === "FAILED") {
             setError("Transaction failed");

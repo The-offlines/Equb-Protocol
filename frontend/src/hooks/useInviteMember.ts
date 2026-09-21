@@ -46,49 +46,67 @@ export function useInviteMember(groupAddress: string) {
 
       // Send invite emails
       try {
-        const groupRes = await fetch(`/api/groups/sync`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userToken, contractAddress: groupAddress }),
+        // Look up invitee email from profile
+        const inviteeProfileRes = await fetch('/api/member/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ walletAddress: inviteeAddress }),
         });
-        const groupData = await groupRes.json() as { group?: { id: string; name: string; contributionAmount: number; maxMembers: number } };
+        const inviteeProfile = await inviteeProfileRes.json() as { email?: string };
+
+        // Get group details
+        const groupRes = await fetch('/api/groups/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contractAddress: groupAddress }),
+        });
+        const groupData = await groupRes.json() as {
+          group?: {
+            id: string;
+            name: string;
+            contributionAmount: number;
+            maxMembers: number;
+          };
+        };
         const group = groupData.group;
 
-        // Email to the invitee
-        await fetch("/api/notifications", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            walletAddress: inviteeAddress,
-            groupId: group?.id ?? null,
-            type: "MEMBER_JOINED",
-            txHash: null,
-            metadata: {
-              groupName: group?.name ?? groupAddress,
-              contributionAmount: group?.contributionAmount ?? null,
-              maxMembers: group?.maxMembers ?? null,
-              invitedBy: walletAddress,
-            },
-          }),
-        });
+        // Email to the invitee using their real email
+        if (inviteeProfile.email) {
+          await fetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              walletAddress: inviteeAddress,
+              groupId: group?.id ?? null,
+              type: 'MEMBER_JOINED',
+              txHash: null,
+              metadata: {
+                groupName: group?.name ?? groupAddress,
+                contributionAmount: group?.contributionAmount ?? null,
+                maxMembers: group?.maxMembers ?? null,
+                invitedBy: walletAddress,
+              },
+            }),
+          });
+        }
 
         // Email to the creator
-        await fetch("/api/notifications", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        await fetch('/api/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             walletAddress: walletAddress,
             groupId: group?.id ?? null,
-            type: "MEMBER_JOINED",
+            type: 'MEMBER_JOINED',
             txHash: null,
             metadata: {
               groupName: group?.name ?? groupAddress,
-              inviteeAddress,
+              inviteeAddress: inviteeProfile.email ?? inviteeAddress,
             },
           }),
         });
       } catch (e) {
-        console.warn("Failed to send invite emails", e);
+        console.warn('Failed to send invite emails', e);
       }
 
       return true;
