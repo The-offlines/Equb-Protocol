@@ -288,21 +288,44 @@ export async function POST(req: NextRequest) {
     if (walletAddress.startsWith('group:')) {
       const gId = walletAddress.replace('group:', '');
       const members = await prisma.member.findMany({
-        where: { groupId: gId, email: { not: null } },
+        where: { groupId: gId },
+      });
+
+      const users = await prisma.user.findMany({
+        where: { 
+          walletAddress: { in: members.map((m: { walletAddress: string }) => m.walletAddress.toLowerCase()) },
+          email: { not: null } 
+        },
       });
 
       const results = await Promise.allSettled(
-        members.map(async (member: { email: string | null; walletAddress: string }) => {
+        users.map(async (u: { email: string | null; walletAddress: string }) => {
           const emailContent = getEmailContent(type, { ...metadata, txHash });
-          await resend.emails.send({
+          const res = await resend.emails.send({
             from: FROM_EMAIL,
-            to: member.email!,
+            to: u.email!,
             subject: emailContent.subject,
             html: emailContent.html,
           });
+          
+          if (res.error) {
+            console.error('[Resend Error]:', res.error);
+            await prisma.notification.create({
+              data: {
+                walletAddress: u.walletAddress,
+                groupId: gId,
+                type,
+                status: 'FAILED',
+                sentAt: null,
+                txHash: txHash ?? null,
+              },
+            });
+            throw new Error(res.error.message);
+          }
+
           await prisma.notification.create({
             data: {
-              walletAddress: member.walletAddress,
+              walletAddress: u.walletAddress,
               groupId: gId,
               type,
               status: 'SENT',
@@ -320,15 +343,20 @@ export async function POST(req: NextRequest) {
     // Single user notification
     let email: string | null = null;
 
-    const user = await prisma.user.findUnique({
-      where: { walletAddress },
+    const user = await prisma.user.findFirst({
+      where: { 
+        walletAddress: { equals: walletAddress, mode: 'insensitive' }
+      },
       select: { email: true },
     });
     email = user?.email ?? null;
 
     if (!email && groupId) {
       const member = await prisma.member.findFirst({
-        where: { walletAddress, groupId },
+        where: { 
+          walletAddress: { equals: walletAddress, mode: 'insensitive' },
+          groupId 
+        },
         select: { email: true },
       });
       email = member?.email ?? null;
@@ -341,12 +369,26 @@ export async function POST(req: NextRequest) {
     const emailContent = getEmailContent(type, { ...metadata, txHash });
 
     try {
-      await resend.emails.send({
+      const res = await resend.emails.send({
         from: FROM_EMAIL,
         to: email,
         subject: emailContent.subject,
         html: emailContent.html,
       });
+
+      if (res.error) {
+        console.error('[Resend Error]:', res.error);
+        const notification = await prisma.notification.create({
+          data: {
+            walletAddress,
+            groupId: groupId ?? null,
+            type,
+            status: 'FAILED',
+            txHash: txHash ?? null,
+          },
+        });
+        return NextResponse.json({ error: res.error.message, notificationId: notification.id }, { status: 500 });
+      }
 
       const notification = await prisma.notification.create({
         data: {

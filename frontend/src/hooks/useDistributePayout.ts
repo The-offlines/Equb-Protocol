@@ -93,12 +93,34 @@ export function useDistributePayout(groupAddress: string) {
             };
             const group = groupData.group;
 
+            let winnerAddress = groupAddress; // fallback
+            try {
+              const { publicClient } = await import("@/src/lib/arc");
+              const { EqubGroup } = await import("@/src/lib/contract");
+              const currentRound = await publicClient.readContract({ 
+                address: groupAddress as `0x${string}`, 
+                abi: EqubGroup as any, 
+                functionName: "currentRound" 
+              }) as number;
+              const winner = await publicClient.readContract({ 
+                address: groupAddress as `0x${string}`, 
+                abi: EqubGroup as any, 
+                functionName: "roundWinner", 
+                args: [currentRound - 1] 
+              }) as string;
+              if (winner && winner !== '0x0000000000000000000000000000000000000000') {
+                winnerAddress = winner;
+              }
+            } catch (e) {
+              console.warn("Failed to fetch winner from contract", e);
+            }
+
             // Email to the winner
             await fetch('/api/notifications', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                walletAddress: groupAddress,
+                walletAddress: winnerAddress,
                 groupId: group?.id ?? null,
                 type: 'ROUND_WINNER',
                 txHash: null,
@@ -112,6 +134,7 @@ export function useDistributePayout(groupAddress: string) {
 
             // Email to all group members
             if (group?.id) {
+              const poolAmount = group.contributionAmount * group.maxMembers;
               await fetch('/api/notifications', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -123,7 +146,7 @@ export function useDistributePayout(groupAddress: string) {
                   metadata: {
                     groupName: group.name,
                     subject: `Round Complete — Payout Distributed! 🏆`,
-                    message: `The payout for this round in "${group.name}" has been distributed successfully. Stay tuned for the next round!`,
+                    message: `The payout of ${poolAmount} ARC for this round in "${group.name}" has been distributed successfully to ${winnerAddress.slice(0, 6)}...${winnerAddress.slice(-4)}. Stay tuned for the next round!`,
                   },
                 }),
               });

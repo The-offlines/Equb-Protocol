@@ -136,6 +136,7 @@ export function useCreateGroup() {
                 dagnaWallet: walletAddress,
                 contributionAmount,
                 maxMembers,
+                roundDuration: interval === 0 ? 7 : 30,
               }),
             });
 

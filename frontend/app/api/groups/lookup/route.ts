@@ -9,8 +9,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'contractAddress is required' }, { status: 400 });
     }
 
-    const group = await prisma.group.findUnique({
-      where: { contractAddress },
+    const group = await prisma.group.findFirst({
+      where: { contractAddress: { equals: contractAddress, mode: 'insensitive' } },
       select: {
         id: true,
         name: true,

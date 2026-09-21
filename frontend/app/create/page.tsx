@@ -226,7 +226,7 @@ export default function CreatePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="max-members" className="text-sm font-semibold text-[#1F1B3A]">Member limit</label>
+                  <label htmlFor="max-members" className="text-sm font-semibold text-[#1F1B3A]">Number of rounds (Member limit)</label>
                   <div className="relative">
                     <Users className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6C6885]" aria-hidden="true" />
                     <input
@@ -242,7 +242,7 @@ export default function CreatePage() {
                       className="w-full rounded-2xl border border-[#1F1B3A]/10 bg-[#F8F7F5] px-11 py-3.5 text-[#1F1B3A] outline-none transition focus:border-[#5A4BDB] focus:bg-white"
                     />
                   </div>
-                  <p id="member-limit-help" className="text-xs text-[#6C6885]">Choose between 3 and 50 members, including you.</p>
+                  <p id="member-limit-help" className="text-xs text-[#6C6885]">The number of rounds equals the max members. Choose between 3 and 50.</p>
                 </div>
 
                 <fieldset className="space-y-3">
@@ -331,7 +331,7 @@ export default function CreatePage() {
                   <dl className="mt-5 grid gap-5 sm:grid-cols-2">
                     <div><dt className="text-xs text-[#6C6885]">Contribution</dt><dd className="mt-1 text-lg font-bold text-[#1F1B3A]">${Number.isFinite(amount) ? amount.toLocaleString() : "0"} USDC</dd></div>
                     <div><dt className="text-xs text-[#6C6885]">Frequency</dt><dd className="mt-1 text-lg font-bold text-[#1F1B3A]">{formValues.interval === "0" ? "Weekly" : "Monthly"}</dd></div>
-                    <div><dt className="text-xs text-[#6C6885]">Member limit</dt><dd className="mt-1 text-lg font-bold text-[#1F1B3A]">{memberCount || "0"}</dd></div>
+                    <div><dt className="text-xs text-[#6C6885]">Rounds (Members)</dt><dd className="mt-1 text-lg font-bold text-[#1F1B3A]">{memberCount || "0"}</dd></div>
                     <div><dt className="text-xs text-[#6C6885]">Expected payout</dt><dd className="mt-1 text-lg font-bold text-[#3BB273]">${estimatedPool.toLocaleString()} USDC</dd></div>
                   </dl>
                 </div>
@@ -377,7 +377,7 @@ export default function CreatePage() {
               <p className="text-xs font-semibold text-[#6C6885]">USDC per {formValues.interval === "0" ? "week" : "month"}</p>
             </div>
             <dl className="mt-5 space-y-4 text-sm">
-              <div className="flex items-center justify-between gap-3"><dt className="text-[#6C6885]">Members</dt><dd className="font-bold">0 / {memberCount || "-"}</dd></div>
+              <div className="flex items-center justify-between gap-3"><dt className="text-[#6C6885]">Rounds / Members</dt><dd className="font-bold">0 / {memberCount || "-"}</dd></div>
               <div className="flex items-center justify-between gap-3"><dt className="text-[#6C6885]">Expected payout</dt><dd className="font-bold text-[#3BB273]">${estimatedPool.toLocaleString()}</dd></div>
                 <div className="flex items-center justify-between gap-3"><dt className="text-[#6C6885]">Access</dt><dd className="font-bold">Invite-only</dd></div>
             </dl>

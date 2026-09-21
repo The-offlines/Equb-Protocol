@@ -17,6 +17,7 @@ type NavbarProps = {
 };
 
 const navItems = [
+  { label: "Explore", href: "/explore" },
   { label: "How it works", href: "/#how-it-works" },
   { label: "My Equbs", href: "/my-equbs" },
 ];
@@ -136,6 +137,7 @@ export function Navbar({
         >
           <div className="flex flex-col gap-1">
             {[
+              ["Explore", "/explore"],
               ["How it works", "/#how-it-works"],
               ["My Equbs", "/my-equbs"],
               ["Join Equb", "/join"],

@@ -31,6 +31,10 @@ export function useContribute(groupAddress: string) {
       const address = getAddress(groupAddress) as Address;
       const abi = EqubGroup as Abi;
       const contributionAmount = await publicClient.readContract({ address, abi, functionName: "contributionAmount" }) as bigint;
+      const memberCount = await publicClient.readContract({ address, abi, functionName: "memberCount" }) as number;
+      const paidCount = await publicClient.readContract({ address, abi, functionName: "paidCount" }) as number;
+      const isLastPayment = Number(paidCount) + 1 === Number(memberCount);
+      
       const memberInfo = await publicClient.readContract({ address, abi, functionName: "memberInfo", args: [walletAddress as Address] }) as readonly [boolean, boolean, boolean, bigint, bigint];
       const isPaid = memberInfo[2];
       if (isPaid) {
@@ -142,7 +146,12 @@ export function useContribute(groupAddress: string) {
               groupId: group.id,
               type: 'PAYMENT_CONFIRMED',
               txHash: hash,
-              metadata: {
+              metadata: isLastPayment ? {
+                subject: `All Members Have Paid! 🎉`,
+                message: `The final contribution for this round has been received from ${walletAddress}. The round is now fully funded!`,
+                groupName: group.name,
+                txHash: hash,
+              } : {
                 groupName: group.name,
                 contributionAmount: group.contributionAmount,
                 paidBy: walletAddress,

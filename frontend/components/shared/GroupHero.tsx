@@ -22,17 +22,19 @@ type GroupHeroProps = {
   onSuccess?: () => void;
 };
 
-const statusStyles: Record<GroupDetail["status"], string> = {
+const statusStyles: Record<GroupDetail["status"] | "full", string> = {
   forming: "bg-[#FFF4E5] text-[#8A5A00]",
+  full: "bg-[#FFF4E5] text-[#8A5A00]",
   active: "bg-[#EAF8F1] text-[#1F8A4D]",
   completed: "bg-[#F0ECFF] text-[#5A4BDB]",
   cancelled: "bg-[#FFF0F3] text-[#B4234D]",
 };
 
-const statusLabels: Record<GroupDetail["status"], string> = {
+const statusLabels: Record<GroupDetail["status"] | "full", string> = {
   forming: "Forming",
+  full: "Full",
   active: "Active",
-  completed: "Completed",
+  completed: "Ended",
   cancelled: "Cancelled",
 };
 
@@ -105,6 +107,10 @@ export function GroupHero({
     }
   };
 
+  const effectiveStatus = group.status === "forming" && group.memberCount >= group.maxMembers 
+    ? "full" 
+    : group.status;
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 18 }}
@@ -118,8 +124,8 @@ export function GroupHero({
       <div className="grid gap-7 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.75fr)] lg:items-center">
         <div className="space-y-6">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] ${statusStyles[group.status]}`}>
-              {statusLabels[group.status]}
+            <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] ${statusStyles[effectiveStatus]}`}>
+              {statusLabels[effectiveStatus]}
             </span>
             {group.isPrivate ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1F1B3A]/5 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#6C6885]">

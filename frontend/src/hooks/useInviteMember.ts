@@ -90,21 +90,23 @@ export function useInviteMember(groupAddress: string) {
           });
         }
 
-        // Email to the creator
-        await fetch('/api/notifications', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            walletAddress: walletAddress,
-            groupId: group?.id ?? null,
-            type: 'MEMBER_JOINED',
-            txHash: null,
-            metadata: {
-              groupName: group?.name ?? groupAddress,
-              inviteeAddress: inviteeProfile.email ?? inviteeAddress,
-            },
-          }),
-        });
+        // Email to all group members
+        if (group?.id) {
+          await fetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              walletAddress: `group:${group.id}`,
+              groupId: group.id,
+              type: 'MEMBER_JOINED',
+              txHash: null,
+              metadata: {
+                groupName: group.name,
+                inviteeAddress: inviteeProfile.email ?? inviteeAddress,
+              },
+            }),
+          });
+        }
       } catch (e) {
         console.warn('Failed to send invite emails', e);
       }
