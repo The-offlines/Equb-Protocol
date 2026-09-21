@@ -43,6 +43,54 @@ export function useInviteMember(groupAddress: string) {
 
       setIsSuccess(true);
       window.dispatchEvent(new Event("equb-data-updated"));
+
+      // Send invite emails
+      try {
+        const groupRes = await fetch(`/api/groups/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userToken, contractAddress: groupAddress }),
+        });
+        const groupData = await groupRes.json() as { group?: { id: string; name: string; contributionAmount: number; maxMembers: number } };
+        const group = groupData.group;
+
+        // Email to the invitee
+        await fetch("/api/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            walletAddress: inviteeAddress,
+            groupId: group?.id ?? null,
+            type: "MEMBER_JOINED",
+            txHash: null,
+            metadata: {
+              groupName: group?.name ?? groupAddress,
+              contributionAmount: group?.contributionAmount ?? null,
+              maxMembers: group?.maxMembers ?? null,
+              invitedBy: walletAddress,
+            },
+          }),
+        });
+
+        // Email to the creator
+        await fetch("/api/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            walletAddress: walletAddress,
+            groupId: group?.id ?? null,
+            type: "MEMBER_JOINED",
+            txHash: null,
+            metadata: {
+              groupName: group?.name ?? groupAddress,
+              inviteeAddress,
+            },
+          }),
+        });
+      } catch (e) {
+        console.warn("Failed to send invite emails", e);
+      }
+
       return true;
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "Unable to invite this wallet.";

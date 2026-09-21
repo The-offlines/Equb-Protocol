@@ -83,18 +83,61 @@ export function useContribute(groupAddress: string) {
       setIsSuccess(true);
       window.dispatchEvent(new Event("equb-data-updated"));
 
-      // Send payment confirmed email
+      // Send payment confirmed email with real data
       try {
+        const groupRes = await fetch("/api/groups/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userToken, contractAddress: groupAddress }),
+        });
+        const groupData = await groupRes.json() as {
+          group?: {
+            id: string;
+            name: string;
+            contributionAmount: number;
+            maxMembers: number;
+          };
+        };
+        const group = groupData.group;
+
+        // Email to the payer
         await fetch("/api/notifications", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             walletAddress,
-            groupId: null,
+            groupId: group?.id ?? null,
             type: "PAYMENT_CONFIRMED",
             txHash: hash,
+            metadata: {
+              groupName: group?.name ?? groupAddress,
+              contributionAmount: group?.contributionAmount ?? null,
+              subject: `Payment Confirmed ✅`,
+              message: `You have successfully paid ${group?.contributionAmount ?? ''} ARC to the Equb group "${group?.name ?? groupAddress}". Transaction: ${hash}`,
+            },
           }),
         });
+
+        // Email to all other group members
+        if (group?.id) {
+          await fetch("/api/notifications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              walletAddress: `group:${group.id}`,
+              groupId: group.id,
+              type: "PAYMENT_CONFIRMED",
+              txHash: hash,
+              metadata: {
+                groupName: group.name,
+                contributionAmount: group.contributionAmount,
+                paidBy: walletAddress,
+                subject: `Member Payment Update 💰`,
+                message: `Member ${walletAddress} has paid ${group.contributionAmount} ARC to your Equb group "${group.name}".`,
+              },
+            }),
+          });
+        }
       } catch (e) {
         console.warn("Failed to send payment confirmation email", e);
       }
