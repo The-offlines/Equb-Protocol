@@ -101,68 +101,7 @@ export function useContribute(groupAddress: string) {
       setIsSuccess(true);
       window.dispatchEvent(new Event("equb-data-updated"));
 
-      // Send payment confirmed email with real data
-      try {
-        const groupRes = await fetch('/api/groups/lookup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contractAddress: groupAddress }),
-        });
-        const groupData = await groupRes.json() as {
-          group?: {
-            id: string;
-            name: string;
-            contributionAmount: number;
-            maxMembers: number;
-            members: { walletAddress: string; email: string | null }[];
-          };
-        };
-        const group = groupData.group;
 
-        // Email to the payer
-        await fetch('/api/notifications', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            walletAddress,
-            groupId: group?.id ?? null,
-            type: 'PAYMENT_CONFIRMED',
-            txHash: hash,
-            metadata: {
-              groupName: group?.name ?? groupAddress,
-              contributionAmount: group?.contributionAmount ?? null,
-              txHash: hash,
-            },
-          }),
-        });
-
-        // Email to all other group members
-        if (group?.id) {
-          await fetch('/api/notifications', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              walletAddress: `group:${group.id}`,
-              groupId: group.id,
-              type: 'PAYMENT_CONFIRMED',
-              txHash: hash,
-              metadata: isLastPayment ? {
-                subject: `All Members Have Paid! 🎉`,
-                message: `The final contribution for this round has been received from ${walletAddress}. The round is now fully funded!`,
-                groupName: group.name,
-                txHash: hash,
-              } : {
-                groupName: group.name,
-                contributionAmount: group.contributionAmount,
-                paidBy: walletAddress,
-                txHash: hash,
-              },
-            }),
-          });
-        }
-      } catch (e) {
-        console.warn('Failed to send payment confirmation email', e);
-      }
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "Contribution failed";
       const normalizedMessage = message.toLowerCase();

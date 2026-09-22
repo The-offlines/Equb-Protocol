@@ -71,10 +71,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No wallet found for this user." }, { status: 404 });
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: { walletAddress },
-    });
-
     const user = await prisma.user.upsert({
       where: { walletAddress },
       update: {
@@ -85,50 +81,6 @@ export async function POST(request: NextRequest) {
         email: email || undefined,
       },
     });
-
-    const userEmail = email || user.email;
-    if (userEmail) {
-      const isNewUser = !existingUser;
-      try {
-        const { Resend } = await import('resend');
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        if (isNewUser) {
-          await resend.emails.send({
-            from: process.env.FROM_EMAIL ?? 'onboarding@resend.dev',
-            to: userEmail,
-            subject: 'Welcome to Equb! 🎉',
-            html: `
-              <h2>Welcome to Equb!</h2>
-              <p>Your wallet <strong>${walletAddress}</strong> has been connected successfully.</p>
-              <p>You can now create or join Equb savings groups on the Arc Testnet.</p>
-              <p>If you did not sign up for Equb, please ignore this email.</p>
-            `,
-          });
-        } else {
-          await resend.emails.send({
-            from: process.env.FROM_EMAIL ?? 'onboarding@resend.dev',
-            to: userEmail,
-            subject: 'New Sign-in to Equb 🔐',
-            html: `
-              <h2>Welcome back to Equb!</h2>
-              <p>A new sign-in was detected for your wallet <strong>${walletAddress}</strong>.</p>
-              <p>If this was you, no action is needed.</p>
-              <p><strong>If you did not sign in, please secure your account immediately.</strong></p>
-            `,
-          });
-        }
-        await prisma.notification.create({
-          data: {
-            walletAddress,
-            type: isNewUser ? 'MEMBER_JOINED' : 'PAYMENT_REMINDER',
-            status: 'SENT',
-            sentAt: new Date(),
-          },
-        });
-      } catch (e) {
-        console.warn('Failed to send welcome/signin email', e);
-      }
-    }
 
     return NextResponse.json({ user });
   } catch (error) {

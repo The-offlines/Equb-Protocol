@@ -44,72 +44,7 @@ export function useInviteMember(groupAddress: string) {
       setIsSuccess(true);
       window.dispatchEvent(new Event("equb-data-updated"));
 
-      // Send invite emails
-      try {
-        // Look up invitee email from profile
-        const inviteeProfileRes = await fetch('/api/member/lookup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ walletAddress: inviteeAddress }),
-        });
-        const inviteeProfile = await inviteeProfileRes.json() as { email?: string };
 
-        // Get group details
-        const groupRes = await fetch('/api/groups/lookup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contractAddress: groupAddress }),
-        });
-        const groupData = await groupRes.json() as {
-          group?: {
-            id: string;
-            name: string;
-            contributionAmount: number;
-            maxMembers: number;
-          };
-        };
-        const group = groupData.group;
-
-        // Email to the invitee using their real email
-        if (inviteeProfile.email) {
-          await fetch('/api/notifications', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              walletAddress: inviteeAddress,
-              groupId: group?.id ?? null,
-              type: 'MEMBER_JOINED',
-              txHash: null,
-              metadata: {
-                groupName: group?.name ?? groupAddress,
-                contributionAmount: group?.contributionAmount ?? null,
-                maxMembers: group?.maxMembers ?? null,
-                invitedBy: walletAddress,
-              },
-            }),
-          });
-        }
-
-        // Email to all group members
-        if (group?.id) {
-          await fetch('/api/notifications', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              walletAddress: `group:${group.id}`,
-              groupId: group.id,
-              type: 'MEMBER_JOINED',
-              txHash: null,
-              metadata: {
-                groupName: group.name,
-                inviteeAddress: inviteeProfile.email ?? inviteeAddress,
-              },
-            }),
-          });
-        }
-      } catch (e) {
-        console.warn('Failed to send invite emails', e);
-      }
 
       return true;
     } catch (caughtError) {

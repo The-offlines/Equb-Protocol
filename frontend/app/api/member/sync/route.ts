@@ -52,29 +52,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Send member joined email to all group members
-    try {
-      const allMembers = await prisma.member.findMany({
-        where: { groupId: group.id, email: { not: null } },
-      });
 
-      await Promise.allSettled(
-        allMembers.map((m: { walletAddress: string }) =>
-          fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notifications`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              walletAddress: m.walletAddress,
-              groupId: group.id,
-              type: "MEMBER_JOINED",
-              txHash: null,
-            }),
-          })
-        )
-      );
-    } catch (e) {
-      console.warn("Failed to send member joined emails", e);
-    }
 
     return NextResponse.json({ member });
   } catch (error) {

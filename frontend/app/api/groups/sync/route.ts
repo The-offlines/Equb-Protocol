@@ -80,37 +80,7 @@ export async function POST(request: NextRequest) {
     });
     console.log("[SYNC] Dagna member upserted successfully");
 
-    // Send group created email to the creator
-    try {
-      const creator = await prisma.user.findUnique({
-        where: { walletAddress: verifiedWalletAddress },
-      });
 
-      if (creator?.email) {
-        await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notifications`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            walletAddress: verifiedWalletAddress,
-            groupId: group.id,
-            type: 'PAYMENT_REMINDER',
-            txHash: null,
-            metadata: {
-              subject: `Your Equb Group "${group.name}" Has Been Created! 🎉`,
-              message: `Your Equb savings group "<strong>${group.name}</strong>" has been created successfully on the Arc Testnet.<br/><br/>
-              <strong>Group Details:</strong><br/>
-              • Contribution Amount: <strong>${group.contributionAmount} ARC</strong><br/>
-              • Max Members: <strong>${group.maxMembers}</strong><br/>
-              • Invite Code: <strong>${group.inviteCode}</strong><br/><br/>
-              Share your invite code with members to get started!`,
-              groupName: group.name,
-            },
-          }),
-        });
-      }
-    } catch (e) {
-      console.warn('Failed to send group created email', e);
-    }
 
     return NextResponse.json({ group });
   } catch (error) {
