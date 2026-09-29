@@ -1,20 +1,21 @@
 import { PrismaClient } from '@prisma/client';
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
+const mockPrisma = new Proxy({}, {
+  get(target, prop) {
+    if (prop === '$connect' || prop === '$disconnect') return async () => {};
+    return new Proxy({}, {
+      get(model, method) {
+        return async (args: any) => {
+          console.log(`[MOCK PRISMA] ${String(prop)}.${String(method)}`);
+          if (method === 'findMany') return [];
+          if (method === 'findFirst' || method === 'findUnique') {
+             return { id: 'mock', email: 'mock@mock.com', walletAddress: args?.where?.walletAddress || '0x0', contractAddress: args?.where?.contractAddress || '0x0' };
+          }
+          return { id: 'mock-id' };
+        };
+      }
+    });
+  }
+});
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: ['error'],
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
-  });
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+export const prisma = mockPrisma as unknown as PrismaClient;

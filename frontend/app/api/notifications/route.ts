@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { prisma } from '@/src/lib/prisma';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = {
+  emails: {
+    send: async (data: any): Promise<{ id: string | null; error: any | null }> => {
+      console.log('[MOCK RESEND] Sending email to', data.to, 'Subject:', data.subject);
+      return { id: 'mock-email-id', error: null };
+    }
+  }
+};
 const FROM_EMAIL = process.env.FROM_EMAIL ?? 'onboarding@resend.dev';
 
 type NotificationType = 'PAYMENT_CONFIRMED' | 'ROUND_WINNER' | 'PAYMENT_REMINDER' | 'MEMBER_JOINED';
